@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+# The vendored loader is a PE binary. `text=auto` currently leaves it alone
+# because git detects it as binary, but a detection that changes its mind would
+# rewrite line endings inside an executable. Scoped to the payload rather than
+# the directory: `binary` also implies -diff, and the vendored README carries the
+# upstream tag, commit and SHA-256 that a loader bump is reviewed on.
+vendor/**/*.dll binary
+vendor/**/*.exe binary
