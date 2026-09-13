@@ -306,6 +306,8 @@ components keep their own licenses; see
 - [CameraUnlock Core](https://github.com/itsloopyo/cameraunlock-core), the shared
   head-tracking library behind this mod.
 
+**Special thanks to Zarlorne from Nexus Mods for funding the Steam port**
+
 ## Disclaimer
 
 This mod is not affiliated with, endorsed by, or supported by Bethesda Game
