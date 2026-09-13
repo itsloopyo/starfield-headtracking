@@ -45,5 +45,10 @@ struct BuildProfile {
     uintptr_t shipLockUpdateRva;
 };
 
+// One file per store, every build for that store inside it. Append new builds;
+// never edit or delete an existing profile.
+extern const BuildProfile kGdkProfile_20251129;
+extern const BuildProfile kSteamProfile_20251129;
+
 const BuildProfile* ResolveBuildProfile();
 }

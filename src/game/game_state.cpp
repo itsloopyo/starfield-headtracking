@@ -54,6 +54,9 @@ bool MouseSaysPlaying() {
 // the camera is wrong, and a state nobody has seen yet is far more likely to be
 // another way of walking around than another cutscene.
 const char* const kNonGameplayStates[] = {
+    // The orbit the game drifts into after the player has left the controls
+    // alone for a while. Nobody is looking through it.
+    "AutoVanity",
     "PhotoMode",
     "TweenMenu",
     "WorkshopIso",

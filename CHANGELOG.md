@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Steam support. Version 1.16.244.0 from Steam now gets the same head tracking,
+  aim separation and crosshair placement as the Xbox app / Game Pass release.
+
+### Changed
+
+- Head tracking pauses while the game's idle camera circles your character
+  after you leave the controls alone.
+- Conversations keep head tracking on.
+
 ## [0.0.0] - 2026-09-08
 
 ### Added

@@ -12,7 +12,9 @@ An unofficial head tracking mod for Starfield that moves the view with your head
 
 ## Requirements
 
-- [Starfield](https://www.xbox.com/en-US/games/starfield) on the Xbox app or PC Game Pass, package version 1.16.244.0. Steam builds are not supported yet.
+- Starfield version 1.16.244.0, from Steam or from the Xbox app / PC Game Pass. Both
+  builds are supported. On any other version the mod stays inactive until it is
+  updated.
 - A tracking source: [OpenTrack](https://github.com/opentrack/opentrack) with a webcam or a supported device, or a phone app that speaks the OpenTrack UDP protocol.
 - Windows 10 or 11, 64-bit.
 
@@ -50,7 +52,9 @@ $env:STARFIELD_PATH = "C:\XboxGames\Starfield\Content"
 Use these files from the installer ZIP:
 
 1. Rename `vendor/ultimate-asi-loader/dinput8.dll` to `winmm.dll` and put it
-   next to `Starfield.exe`, usually in `C:\XboxGames\Starfield\Content`.
+   next to `Starfield.exe`. That is usually
+   `C:\Program Files (x86)\Steam\steamapps\common\Starfield` for Steam and
+   `C:\XboxGames\Starfield\Content` for the Xbox app.
 2. Copy `plugins/StarfieldHeadTracking.asi` to the same folder. The mod writes its
    own `HeadTracking.ini` beside it on first launch.
 3. Configure your tracker using the steps below, then launch Starfield.

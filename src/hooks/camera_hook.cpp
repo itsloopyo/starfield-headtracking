@@ -41,11 +41,12 @@ constexpr size_t kPointerSize = sizeof(uintptr_t);
 // per-frame work through it.
 constexpr uintptr_t kCameraStateOffset = 0x10;
 
-// Diagnostic budgets. The survey is 17 lines a call and the apply line is one a
-// second, so both are bounded rather than left to run for the session.
+// The survey is 17 lines a call and only describes the layout, so two are
+// enough. The apply line is rate limited instead of counted: a count runs out
+// partway through a session and leaves the later minutes with no record of
+// what the camera was written with.
 constexpr int      kMaxSurveys           = 2;
 constexpr uint64_t kSurveyIntervalMs     = 5000;
-constexpr int      kMaxApplyLines        = 400;
 constexpr uint64_t kApplyLogIntervalMs   = 1000;
 
 // Below this the clean forward has rolled onto or behind the drawn view plane
@@ -224,13 +225,16 @@ void LogApplyState(bool active, bool haveRotation, bool havePosition,
                    float yaw, float pitch, float roll,
                    const CameraBasis& clean, const CameraBasis& drawn,
                    const NiFrustum& frustum, float zoom) {
+    // Silent while nothing is tracked, so a session spent in menus writes
+    // nothing, but the frame tracking stops is still recorded.
     static uint64_t s_lastMs = 0;
-    static int s_lines = 0;
-    if (s_lines >= kMaxApplyLines) return;
+    static bool s_wasActive = false;
     const uint64_t now = GetTickCount64();
-    if (now - s_lastMs < kApplyLogIntervalMs) return;
+    const bool changed = active != s_wasActive;
+    s_wasActive = active;
+    if (!active && !changed) return;
+    if (!changed && now - s_lastMs < kApplyLogIntervalMs) return;
     s_lastMs = now;
-    ++s_lines;
     const float cosAngle = Dot3(clean.f, drawn.f);
     Logger::Instance().Info(
         "apply: active=%d rot=%d pos=%d pose(%+.2f,%+.2f,%+.2f) turned %.2f deg "
@@ -375,6 +379,8 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     const HeadPose pose = SampleHeadPose(mod, active, readout.frustum);
 
     if (!pose.haveRotation && !pose.havePosition) {
+        LogApplyState(active, false, false, 0.0f, 0.0f, 0.0f, cleanBasis, cleanBasis,
+                      readout.frustum, pose.zoom);
         ReleaseTracking(niCamera, layout.localTransformOffset, pristine, ourWriteStood);
         return;
     }
@@ -491,7 +497,7 @@ bool ProjectAimDirection(const CameraFrame& frame, float& outNdcX, float& outNdc
     return true;
 }
 
-bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY) {
+bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY, float* outDistance) {
     uintptr_t player = 0;
     float target[4];
     if (!SafeRead(g_playerAddress, player) || !player || !SafeRead(player + g_aimPointOffset, target)) {
@@ -503,6 +509,7 @@ bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY) 
     // as projectile launch so crossing an origin boundary does not move the mark.
     g_relativeAimPoint(relative, target, frame.clean.e);
     const float distance = Dot3(relative, frame.clean.f);
+    if (outDistance) *outDistance = distance;
     return ProjectAimAtDistance(frame, distance, outNdcX, outNdcY);
 }
 

@@ -111,6 +111,30 @@ void ReportTransientFailure(const char* what) {
                                static_cast<unsigned long long>(n));
 }
 
+// Every term of the reticle placement on one line, once a second while it is
+// being placed: the aim depth, the lean resolved along the clean camera's own
+// axes, where the aim direction alone would land, and where the point lands.
+// The parallax is the difference of the last two, so one line is enough to
+// check it against lean / (distance - forward lean) by hand.
+void LogReticleGeometry(const CameraFrame& frame, bool projected, float distance,
+                        float ndcX, float ndcY) {
+    static std::atomic<uint64_t> s_lastMs{0};
+    const uint64_t now = GetTickCount64();
+    if (now - s_lastMs.load(std::memory_order_relaxed) < 1000) return;
+    s_lastMs.store(now, std::memory_order_relaxed);
+
+    float lean[3];
+    for (int i = 0; i < 3; ++i) lean[i] = frame.drawn.e[i] - frame.clean.e[i];
+    float dirX = 0, dirY = 0;
+    const bool direction = ProjectAimDirection(frame, dirX, dirY);
+    Logger::Instance().Info(
+        "reticle: dist=%.3f lean(r,u,f)=(%+.3f,%+.3f,%+.3f) direction=%s(%+.4f,%+.4f) "
+        "point=%s(%+.4f,%+.4f) parallax=(%+.4f,%+.4f) eye(%.2f,%.2f,%.2f)",
+        distance, Dot3(lean, frame.clean.r), Dot3(lean, frame.clean.u), Dot3(lean, frame.clean.f),
+        direction ? "" : "none", dirX, dirY, projected ? "" : "none", ndcX, ndcY,
+        ndcX - dirX, ndcY - dirY, frame.clean.e[0], frame.clean.e[1], frame.clean.e[2]);
+}
+
 // The reticle's own coordinates are in its parent's space, so the projected
 // offset has to be divided back through every scale between the movie's visible
 // frame and the reticle. False when the HUD cannot supply one of those numbers.
@@ -134,8 +158,10 @@ bool ReticleOffset(uintptr_t movie, uintptr_t root, const CameraFrame& frame,
 
     const double width = rect.right - rect.left;
     const double height = rect.bottom - rect.top;
-    float ndcX = 0, ndcY = 0;
-    if (ProjectPlayerAim(frame, ndcX, ndcY)) {
+    float ndcX = 0, ndcY = 0, distance = 0;
+    const bool projected = ProjectPlayerAim(frame, ndcX, ndcY, &distance);
+    LogReticleGeometry(frame, projected, distance, ndcX, ndcY);
+    if (projected) {
         outX = ndcX * width * 0.5 / (rootX * groupX);
         outY = -ndcY * height * 0.5 / (rootY * groupY);
     } else {

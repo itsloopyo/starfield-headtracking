@@ -43,6 +43,8 @@ set(MOD_SOURCES
     src/hooks/aim_hook.cpp
     src/hooks/weapon_hook.cpp
     src/game/build_profile.cpp
+    src/game/gdk_offsets.cpp
+    src/game/steam_offsets.cpp
     src/game/ads_state.cpp
     src/game/base_fov.cpp
     src/hooks/input_hook.cpp

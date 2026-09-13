@@ -49,6 +49,7 @@ uintptr_t GetLiveCameraAddress();
 //
 // False when the aim has rolled behind the drawn camera.
 bool ProjectAimDirection(const CameraFrame& frame, float& outNdcX, float& outNdcY);
-bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY);
+bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY,
+                      float* outDistance = nullptr);
 
 } // namespace StarfieldHT
