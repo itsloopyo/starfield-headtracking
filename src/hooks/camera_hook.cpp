@@ -228,11 +228,12 @@ void LogApplyState(bool active, bool haveRotation, bool havePosition,
     // Silent while nothing is tracked, so a session spent in menus writes
     // nothing, but the frame tracking stops is still recorded.
     static uint64_t s_lastMs = 0;
-    static bool s_wasActive = false;
+    static bool s_wasTracked = false;
     const uint64_t now = GetTickCount64();
-    const bool changed = active != s_wasActive;
-    s_wasActive = active;
-    if (!active && !changed) return;
+    const bool tracked = active && (haveRotation || havePosition);
+    const bool changed = tracked != s_wasTracked;
+    s_wasTracked = tracked;
+    if (!tracked && !changed) return;
     if (!changed && now - s_lastMs < kApplyLogIntervalMs) return;
     s_lastMs = now;
     const float cosAngle = Dot3(clean.f, drawn.f);

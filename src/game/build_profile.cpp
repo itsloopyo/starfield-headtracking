@@ -7,8 +7,7 @@ namespace StarfieldHT {
 
 namespace {
 
-// Newest first: the top entry is the one an unmatched build is compared against
-// to say whether the running game is newer or older than anything known.
+// Newest first: the top entry is the comparison when no known timestamp matches.
 const BuildProfile* const kKnownProfiles[] = {
     &kSteamProfile_20251129,
     &kGdkProfile_20251129,
@@ -32,6 +31,12 @@ const BuildProfile* MatchRunningBuild() {
     }
 
     const BuildProfile* primary = kKnownProfiles[0];
+    for (const BuildProfile* profile : kKnownProfiles) {
+        if (profile->fingerprint.TimeDateStamp == running.TimeDateStamp) {
+            primary = profile;
+            break;
+        }
+    }
     const auto mismatch = cameraunlock::memory::ClassifyMismatch(running, primary->fingerprint);
     const char* reason =
         mismatch == cameraunlock::memory::FingerprintMismatch::Newer
