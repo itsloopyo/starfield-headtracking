@@ -1,6 +1,6 @@
 [workspace]
 name = "starfield-head-tracking"
-version = "0.1.0"
+version = "0.0.0"
 description = "Head tracking mod for Starfield using the CameraUnlock shared library"
 license = "MIT"
 channels = ["conda-forge"]

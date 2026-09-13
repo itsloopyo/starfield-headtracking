@@ -4,7 +4,7 @@
 
 namespace StarfieldHT {
 
-inline constexpr const char* VERSION = "0.1.0";
+inline constexpr const char* VERSION = "0.0.0";
 
 inline constexpr const char* GAME_EXE = "Starfield.exe";
 

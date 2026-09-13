@@ -1,35 +1,31 @@
 {
-    "schema_version":  2,
-    "mod_info":  {
-                     "name":  "StarfieldHeadTracking",
-                     "version":  "0.1.0",
-                     "game_id":  "starfield"
-                 },
-    "strategy":  "AsiLoader",
-    "delivery_mode":  "manifest",
-    "loader":  {
-                   "seed":  [
-                                {
-                                    "target":  "HeadTracking.ini",
-                                    "content_b64":  "OyBTdGFyZmllbGQgSGVhZCBUcmFja2luZyBDb25maWd1cmF0aW9uCjsgRGVsZXRlIHRoaXMgZmlsZSB0byByZXNldCB0byBkZWZhdWx0cwoKW05ldHdvcmtdCjsgVURQIHBvcnQgZm9yIE9wZW5UcmFjayBkYXRhIChkZWZhdWx0OiA0MjQyKQpVRFBQb3J0PTQyNDIKCltTZW5zaXRpdml0eV0KOyBSb3RhdGlvbiBzZW5zaXRpdml0eSBtdWx0aXBsaWVycyAoMS4wID0gMToxKS4gTGVhdmUgdGhlbSBhdCAxLjAgYW5kIHNoYXBlIHRoZQo7IHBvc2UgaW4geW91ciB0cmFja2VyIGluc3RlYWQsIHNvIG9uZSBwcm9maWxlIGJlaGF2ZXMgdGhlIHNhbWUgaW4gZXZlcnkgZ2FtZS4KWWF3TXVsdGlwbGllcj0xLjAKUGl0Y2hNdWx0aXBsaWVyPTEuMApSb2xsTXVsdGlwbGllcj0xLjAKOyBTbW9vdGhpbmcsIGFwcGxpZWQgdG8gYm90aCByb3RhdGlvbiBhbmQgcG9zaXRpb24uIFRoZSB2YWx1ZSBpcyBwaWNrZWQKOyBwZXIgY29ubmVjdGlvbiBmcm9tIHRoZSBwYWNrZXQgc291cmNlIGFkZHJlc3MuCjsgTG9jYWxTbW9vdGhpbmc6IHRyYWNrZXIgcnVubmluZyBvbiB0aGlzIG1hY2hpbmUgKGxvb3BiYWNrKS4KOyBSZW1vdGVTbW9vdGhpbmc6IHRyYWNrZXIgb24gYSByZW1vdGUgbmV0d29yayBkZXZpY2UgKHBob25lIG9uIFdpRmkpLgo7IDAuMCA9IG5vIHNtb290aGluZywgMS4wID0gaGVhdnkuIFJhaXNlIGZvciBhIG5vaXNpZXIgdHJhY2tlciAtIGl0CjsgY29zdHMgcGVyY2VpdmVkIGxhdGVuY3kuCkxvY2FsU21vb3RoaW5nPTAuMApSZW1vdGVTbW9vdGhpbmc9MC4xNQoKW1Bvc2l0aW9uXQo7IFBvc2l0aW9uIHRyYWNraW5nIHNlbnNpdGl2aXR5ICgwLjAtNS4wKS4gTGVhdmUgYXQgMS4wIGFuZCBzaGFwZSB0aGUgcG9zZSBpbgo7IHlvdXIgdHJhY2tlciBpbnN0ZWFkLCBzbyBvbmUgcHJvZmlsZSBiZWhhdmVzIHRoZSBzYW1lIGluIGV2ZXJ5IGdhbWUuClNlbnNpdGl2aXR5WD0xLjAKU2Vuc2l0aXZpdHlZPTEuMApTZW5zaXRpdml0eVo9MS4wCjsgUG9zaXRpb24gbGltaXRzIGluIG1ldGVycyAoaG93IGZhciB0aGUgY2FtZXJhIGNhbiBtb3ZlKS4gTm90aGluZyB5ZXQgc3RvcHMgYQo7IGxlYW4gYXQgYSB3YWxsLCBzbyB0aGVzZSBzdGF5IHNtYWxsIGVub3VnaCB0byBrZWVwIHRoZSB2aWV3IGluc2lkZSB0aGUgcm9vbS4KTGltaXRYPTAuMzAKTGltaXRZPTAuMjAKTGltaXRaPTAuNDAKOyBCYWNrd2FyZCBsZWFuIGxpbWl0IChwcmV2ZW50cyBjYW1lcmEgY2xpcHBpbmcgdGhyb3VnaCBwbGF5ZXIgbW9kZWwpCkxpbWl0WkJhY2s9MC4xMAo7IEVuYWJsZS9kaXNhYmxlIHBvc2l0aW9uIHRyYWNraW5nICg2RE9GKQpFbmFibGVkPXRydWUKCltIb3RrZXlzXQo7IFZpcnR1YWwga2V5IGNvZGVzIChoZXgpClRvZ2dsZUtleT0weDIzICAgICAgICAgOyBFbmQgLSBFbmFibGUvZGlzYWJsZSBoZWFkIHRyYWNraW5nClBvc2l0aW9uVG9nZ2xlS2V5PTB4MjEgOyBQYWdlIFVwIC0gQ3ljbGUgdHJhY2tpbmcgbW9kZQpZYXdNb2RlS2V5PTB4MjIgICAgICAgIDsgUGFnZSBEb3duIC0gVG9nZ2xlIHdvcmxkL2xvY2FsIHlhdwpBZHNNb2RlS2V5PTB4MkQgICAgICAgIDsgSW5zZXJ0IC0gQ3ljbGUgd2hhdCB0aGUgc2lnaHRzIGRvCgpbR2VuZXJhbF0KOyBBdXRvLWVuYWJsZSB0cmFja2luZyBvbiBnYW1lIHN0YXJ0CkF1dG9FbmFibGU9dHJ1ZQo7IEhvcml6b24gbG9jazogdHJ1ZSAoZGVmYXVsdCkgdHVybnMgaGVhZCB5YXcgYWJvdXQgdGhlIHdvcmxkJ3MgdXAgYXhpcyBhbmQKOyBtb3ZlcyBhIGxlYW4gYWxvbmcgdGhlIGdyb3VuZCwgd2hhdGV2ZXIgdGhlIGNhbWVyYSBpcyBwaXRjaGVkIG9yIHJvbGxlZCB0by4KOyBmYWxzZSB1c2VzIHRoZSBjYW1lcmEncyBvd24gYXhlcyBmb3IgYm90aC4KV29ybGRTcGFjZVlhdz10cnVlCgpbQ3Jvc3NoYWlyXQo7IFJlcG9zaXRpb24gdGhlIGdhbWUncyBuYXRpdmUgY3Jvc3NoYWlyIHRvIGZvbGxvdyB5b3VyIGFpbSBvbmNlCjsgaGVhZCB0cmFja2luZyBtb3ZlcyB0aGUgdmlldy4gU2V0IGZhbHNlIHRvIGxlYXZlIGl0IGF0IGNlbnRyZS4KU2hvdz10cnVlCgpbU2hpcF0KOyBmYWxzZSBhbmNob3JzIHRoZSBhaW0gY2lyY2xlIHRvIHRoZSBmb3J3YXJkIHZpZXcuIHRydWUga2VlcHMgaXQgaGVhZC1maXhlZC4KOyBSZXN0YXJ0IHRoZSBnYW1lIGFmdGVyIGNoYW5naW5nIHRoaXMgc2V0dGluZy4KQWltVUlGb2xsb3dzSGVhZD1mYWxzZQo="
-                                }
-                            ]
-               },
-    "files":  [
-                  {
-                      "source":  "vendor/ultimate-asi-loader/dinput8.dll",
-                      "target":  "winmm.dll",
-                      "backup":  true
-                  },
-                  {
-                      "source":  "plugins/StarfieldHeadTracking.asi",
-                      "target":  "StarfieldHeadTracking.asi"
-                  }
-              ],
-    "runtime_requirements":  [
-
-                             ],
-    "dependencies":  [
-
-                     ]
+    "schema_version": 2,
+    "mod_info": {
+        "name": "StarfieldHeadTracking",
+        "version": "0.0.0",
+        "game_id": "starfield"
+    },
+    "strategy": "AsiLoader",
+    "delivery_mode": "manifest",
+    "loader": {
+        "seed": [
+            {
+                "target": "HeadTracking.ini",
+                "content_b64": "OyBTdGFyZmllbGQgSGVhZCBUcmFja2luZyBDb25maWd1cmF0aW9uCjsgRGVsZXRlIHRoaXMgZmlsZSB0byByZXNldCB0byBkZWZhdWx0cwoKW05ldHdvcmtdCjsgVURQIHBvcnQgZm9yIE9wZW5UcmFjayBkYXRhIChkZWZhdWx0OiA0MjQyKQpVRFBQb3J0PTQyNDIKCltTZW5zaXRpdml0eV0KOyBSb3RhdGlvbiBzZW5zaXRpdml0eSBtdWx0aXBsaWVycyAoMS4wID0gMToxKS4gTGVhdmUgdGhlbSBhdCAxLjAgYW5kIHNoYXBlIHRoZQo7IHBvc2UgaW4geW91ciB0cmFja2VyIGluc3RlYWQsIHNvIG9uZSBwcm9maWxlIGJlaGF2ZXMgdGhlIHNhbWUgaW4gZXZlcnkgZ2FtZS4KWWF3TXVsdGlwbGllcj0xLjAKUGl0Y2hNdWx0aXBsaWVyPTEuMApSb2xsTXVsdGlwbGllcj0xLjAKOyBTbW9vdGhpbmcsIGFwcGxpZWQgdG8gYm90aCByb3RhdGlvbiBhbmQgcG9zaXRpb24uIFRoZSB2YWx1ZSBpcyBwaWNrZWQKOyBwZXIgY29ubmVjdGlvbiBmcm9tIHRoZSBwYWNrZXQgc291cmNlIGFkZHJlc3MuCjsgTG9jYWxTbW9vdGhpbmc6IHRyYWNrZXIgcnVubmluZyBvbiB0aGlzIG1hY2hpbmUgKGxvb3BiYWNrKS4KOyBSZW1vdGVTbW9vdGhpbmc6IHRyYWNrZXIgb24gYSByZW1vdGUgbmV0d29yayBkZXZpY2UgKHBob25lIG9uIFdpRmkpLgo7IDAuMCA9IG5vIHNtb290aGluZywgMS4wID0gaGVhdnkuIFJhaXNlIGZvciBhIG5vaXNpZXIgdHJhY2tlciAtIGl0CjsgY29zdHMgcGVyY2VpdmVkIGxhdGVuY3kuCkxvY2FsU21vb3RoaW5nPTAuMApSZW1vdGVTbW9vdGhpbmc9MC4xNQoKW1Bvc2l0aW9uXQo7IFBvc2l0aW9uIHRyYWNraW5nIHNlbnNpdGl2aXR5ICgwLjAtNS4wKS4gTGVhdmUgYXQgMS4wIGFuZCBzaGFwZSB0aGUgcG9zZSBpbgo7IHlvdXIgdHJhY2tlciBpbnN0ZWFkLCBzbyBvbmUgcHJvZmlsZSBiZWhhdmVzIHRoZSBzYW1lIGluIGV2ZXJ5IGdhbWUuClNlbnNpdGl2aXR5WD0xLjAKU2Vuc2l0aXZpdHlZPTEuMApTZW5zaXRpdml0eVo9MS4wCjsgUG9zaXRpb24gbGltaXRzIGluIG1ldGVycyAoaG93IGZhciB0aGUgY2FtZXJhIGNhbiBtb3ZlKS4gTm90aGluZyB5ZXQgc3RvcHMgYQo7IGxlYW4gYXQgYSB3YWxsLCBzbyB0aGVzZSBzdGF5IHNtYWxsIGVub3VnaCB0byBrZWVwIHRoZSB2aWV3IGluc2lkZSB0aGUgcm9vbS4KTGltaXRYPTAuMzAKTGltaXRZPTAuMjAKTGltaXRaPTAuNDAKOyBCYWNrd2FyZCBsZWFuIGxpbWl0IChwcmV2ZW50cyBjYW1lcmEgY2xpcHBpbmcgdGhyb3VnaCBwbGF5ZXIgbW9kZWwpCkxpbWl0WkJhY2s9MC4xMAo7IEVuYWJsZS9kaXNhYmxlIHBvc2l0aW9uIHRyYWNraW5nICg2RE9GKQpFbmFibGVkPXRydWUKCltIb3RrZXlzXQo7IFZpcnR1YWwga2V5IGNvZGVzIChoZXgpClRvZ2dsZUtleT0weDIzICAgICAgICAgOyBFbmQgLSBFbmFibGUvZGlzYWJsZSBoZWFkIHRyYWNraW5nClBvc2l0aW9uVG9nZ2xlS2V5PTB4MjEgOyBQYWdlIFVwIC0gQ3ljbGUgdHJhY2tpbmcgbW9kZQpZYXdNb2RlS2V5PTB4MjIgICAgICAgIDsgUGFnZSBEb3duIC0gVG9nZ2xlIHdvcmxkL2xvY2FsIHlhdwpBZHNNb2RlS2V5PTB4MkQgICAgICAgIDsgSW5zZXJ0IC0gQ3ljbGUgd2hhdCB0aGUgc2lnaHRzIGRvCgpbR2VuZXJhbF0KOyBBdXRvLWVuYWJsZSB0cmFja2luZyBvbiBnYW1lIHN0YXJ0CkF1dG9FbmFibGU9dHJ1ZQo7IEhvcml6b24gbG9jazogdHJ1ZSAoZGVmYXVsdCkgdHVybnMgaGVhZCB5YXcgYWJvdXQgdGhlIHdvcmxkJ3MgdXAgYXhpcyBhbmQKOyBtb3ZlcyBhIGxlYW4gYWxvbmcgdGhlIGdyb3VuZCwgd2hhdGV2ZXIgdGhlIGNhbWVyYSBpcyBwaXRjaGVkIG9yIHJvbGxlZCB0by4KOyBmYWxzZSB1c2VzIHRoZSBjYW1lcmEncyBvd24gYXhlcyBmb3IgYm90aC4KV29ybGRTcGFjZVlhdz10cnVlCgpbQ3Jvc3NoYWlyXQo7IFJlcG9zaXRpb24gdGhlIGdhbWUncyBuYXRpdmUgY3Jvc3NoYWlyIHRvIGZvbGxvdyB5b3VyIGFpbSBvbmNlCjsgaGVhZCB0cmFja2luZyBtb3ZlcyB0aGUgdmlldy4gU2V0IGZhbHNlIHRvIGxlYXZlIGl0IGF0IGNlbnRyZS4KU2hvdz10cnVlCgpbU2hpcF0KOyBmYWxzZSBhbmNob3JzIHRoZSBhaW0gY2lyY2xlIHRvIHRoZSBmb3J3YXJkIHZpZXcuIHRydWUga2VlcHMgaXQgaGVhZC1maXhlZC4KOyBSZXN0YXJ0IHRoZSBnYW1lIGFmdGVyIGNoYW5naW5nIHRoaXMgc2V0dGluZy4KQWltVUlGb2xsb3dzSGVhZD1mYWxzZQo="
+            }
+        ]
+    },
+    "files": [
+        {
+            "source": "vendor/ultimate-asi-loader/dinput8.dll",
+            "target": "winmm.dll",
+            "backup": true
+        },
+        {
+            "source": "plugins/StarfieldHeadTracking.asi",
+            "target": "StarfieldHeadTracking.asi"
+        }
+    ],
+    "runtime_requirements": [],
+    "dependencies": []
 }
