@@ -38,6 +38,9 @@ extern constexpr BuildProfile kSteamProfile_20251129 = {
     0x2122BF0,
     0x2155EA0,
     0xDF8,
+    0x1A5A2C0,
+    0x1487B80,
+    0x61FAE80,
 };
 
 static_assert(kSteamProfile_20251129.playerSingletonRva == 0x5F43230, "player singleton RVA");

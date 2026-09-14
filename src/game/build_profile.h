@@ -47,6 +47,9 @@ struct BuildProfile {
     // PlayerCharacter -> the skeleton's Camera bone, whose p-AttachLight child
     // carries the helmet light.
     uintptr_t playerCameraBoneOffset;
+    uintptr_t playerHitEventRva;
+    uintptr_t hudHitEventRva;
+    uintptr_t worldOriginIndexRva;
 };
 
 // One file per store, every build for that store inside it. Append new builds;

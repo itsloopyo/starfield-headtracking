@@ -6,6 +6,7 @@
 #include "core/rtti_utils.h"
 #include "game/build_profile.h"
 #include "game/game_state.h"
+#include "game/impact_projection.h"
 #include "hooks/camera_hook.h"
 
 #include <cameraunlock/memory/pattern_scanner.h>
@@ -59,6 +60,45 @@ void (*g_releaseValue)(GfxNumber*) = nullptr;
 
 constexpr char kReticleX[] = "root1.CenterGroup_mc.ReticleBase_mc.x";
 constexpr char kReticleY[] = "root1.CenterGroup_mc.ReticleBase_mc.y";
+
+using HitEvent = uintptr_t (*)(uintptr_t, uintptr_t, uintptr_t);
+HitEvent g_playerHitOriginal = nullptr;
+HitEvent g_hudHitOriginal = nullptr;
+// The player's damage callback emits the HUD event synchronously, but drops
+// the impact position from that event. Keep it only for that call chain.
+thread_local uintptr_t g_hitData = 0;
+uintptr_t g_worldOriginIndex = 0;
+using RelativeImpact = float* (*)(float*, const ImpactPoint*, const float*);
+RelativeImpact g_relativeImpact = nullptr;
+std::mutex g_impactMutex;
+ImpactPoint g_impact;
+bool g_hasImpact = false;
+
+uintptr_t PlayerHitEvent(uintptr_t sink, uintptr_t data, uintptr_t source) {
+    const uintptr_t previous = g_hitData;
+    g_hitData = data;
+    const auto result = g_playerHitOriginal(sink, data, source);
+    g_hitData = previous;
+    return result;
+}
+
+uintptr_t HudHitEvent(uintptr_t sink, uintptr_t data, uintptr_t source) {
+    ImpactPoint impact;
+    bool valid = false;
+    if (g_hitData) {
+        valid = cameraunlock::memory::SafeRead(g_hitData, impact.position)
+             && cameraunlock::memory::SafeRead(g_worldOriginIndex, impact.originIndex)
+             && std::isfinite(impact.position[0]) && std::isfinite(impact.position[1])
+             && std::isfinite(impact.position[2]);
+        if (!valid) Logger::Instance().Error("Hit marker: cannot read the impact position or world origin");
+    }
+    {
+        const std::lock_guard<std::mutex> lock(g_impactMutex);
+        g_impact = impact;
+        g_hasImpact = valid;
+    }
+    return g_hudHitOriginal(sink, data, source);
+}
 
 // The vtable pointer and the slot are both read rather than dereferenced. A
 // HUD torn down between frames leaves a plausible-looking address in the menu's
@@ -237,10 +277,78 @@ void PositionReticle(uintptr_t menu) {
     }
 }
 
+void PositionHitMarker(uintptr_t menu) {
+    uintptr_t movie = 0, root = 0;
+    if (!cameraunlock::memory::SafeRead(menu + kMenuMovieOffset, movie) || !movie
+        || !cameraunlock::memory::SafeRead(movie + kMovieRootOffset, root) || !root) return;
+
+    constexpr char markerX[] = "root1.HitAndKillIndicator_mc.x";
+    constexpr char markerY[] = "root1.HitAndKillIndicator_mc.y";
+    static uintptr_t lastMovie = 0;
+    static double baseX = 0, baseY = 0;
+    if (movie != lastMovie) {
+        if (!GetNumber(root, markerX, baseX) || !GetNumber(root, markerY, baseY)) {
+            ReportTransientFailure("HUD movie has no numeric hit marker position");
+            return;
+        }
+        lastMovie = movie;
+        Logger::Instance().Info("Hit marker bound: origin %.2f, %.2f", baseX, baseY);
+        const std::lock_guard<std::mutex> lock(g_impactMutex);
+        g_hasImpact = false;
+    }
+
+    ImpactPoint impact;
+    bool hasImpact;
+    {
+        const std::lock_guard<std::mutex> lock(g_impactMutex);
+        impact = g_impact;
+        hasImpact = g_hasImpact;
+    }
+    double x = baseX, y = baseY;
+    CameraFrame frame;
+    if (hasImpact && Mod::Instance().IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(frame)) {
+        using GetRect = MovieRect* (*)(uintptr_t, MovieRect*);
+        const auto getRect = Virtual<GetRect>(movie, kSlotGetVisibleRect);
+        MovieRect rect{};
+        double scaleX = 0, scaleY = 0;
+        if (!getRect || !GetNumber(root, "root1.scaleX", scaleX)
+            || !GetNumber(root, "root1.scaleY", scaleY) || scaleX == 0 || scaleY == 0) {
+            ReportTransientFailure("invalid hit marker parent scale");
+            return;
+        }
+        getRect(movie, &rect);
+        if (!(rect.right > rect.left) || !(rect.bottom > rect.top)) {
+            ReportTransientFailure("invalid hit marker HUD frame");
+            return;
+        }
+        float relative[3], ndcX = 0, ndcY = 0;
+        g_relativeImpact(relative, &impact, frame.drawn.e);
+        const bool projected = ProjectImpact(frame, relative, ndcX, ndcY);
+        if (projected) {
+            x += ndcX * (rect.right - rect.left) * 0.5 / scaleX;
+            y -= ndcY * (rect.bottom - rect.top) * 0.5 / scaleY;
+        } else {
+            x += kOffscreenFrameWidths * (rect.right - rect.left) / scaleX;
+        }
+        static uint64_t lastLog = 0;
+        const auto now = GetTickCount64();
+        if (now - lastLog >= 1000) {
+            lastLog = now;
+            Logger::Instance().Info("hit marker: impact(%.3f,%.3f,%.3f) origin=%u projected=%d ndc(%+.4f,%+.4f) hud(%.2f,%.2f)",
+                impact.position[0], impact.position[1], impact.position[2], impact.originIndex,
+                projected, ndcX, ndcY, x, y);
+        }
+    }
+    if (!SetNumber(root, markerX, x) || !SetNumber(root, markerY, y)) {
+        ReportTransientFailure("could not set the HUD hit marker position");
+    }
+}
+
 void UpdateHud(uintptr_t menu) {
     g_original(menu);
     __try {
         PositionReticle(menu);
+        PositionHitMarker(menu);
     } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
         ReportHudException(GetExceptionCode());
     }
@@ -420,6 +528,25 @@ bool InstallStockReticleHook() {
         return false;
     }
     Logger::Instance().Info("Stock reticle HUD hook installed");
+    if (profile->worldOriginIndexRva + sizeof(uint32_t) > moduleSize
+        || profile->relativeAimPointRva >= moduleSize
+        || profile->playerHitEventRva >= moduleSize || profile->hudHitEventRva >= moduleSize) {
+        Logger::Instance().Error("Hit marker: a build profile RVA is outside the module");
+        return false;
+    }
+    g_worldOriginIndex = base + profile->worldOriginIndexRva;
+    g_relativeImpact = reinterpret_cast<RelativeImpact>(base + profile->relativeAimPointRva);
+    for (const auto& hook : {std::pair{profile->playerHitEventRva, &PlayerHitEvent},
+                             std::pair{profile->hudHitEventRva, &HudHitEvent}}) {
+        auto* original = hook.first == profile->playerHitEventRva ? &g_playerHitOriginal : &g_hudHitOriginal;
+        const auto hitStatus = MH_CreateHook(reinterpret_cast<void*>(base + hook.first),
+            reinterpret_cast<void*>(hook.second), reinterpret_cast<void**>(original));
+        if (hitStatus != MH_OK) {
+            Logger::Instance().Error("Hit marker hook: %s", MH_StatusToString(hitStatus));
+            return false;
+        }
+    }
+    Logger::Instance().Info("Hit marker impact hooks installed");
     return true;
 }
 
