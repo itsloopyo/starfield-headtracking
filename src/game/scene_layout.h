@@ -23,6 +23,7 @@ struct SceneLayout {
     bool      valid = false;
     uintptr_t cameraRootOffset = 0;    // TESCamera -> NiNode* (the camera root)
     uintptr_t childrenDataOffset = 0;  // NiNode -> NiAVObject** (children array)
+    uintptr_t parentOffset = 0;        // NiAVObject -> NiNode* (its parent)
     uintptr_t localTransformOffset = 0;
     uintptr_t worldTransformOffset = 0;
     uintptr_t worldToClipOffset = 0;   // NiCamera only

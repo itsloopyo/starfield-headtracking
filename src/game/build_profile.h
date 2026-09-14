@@ -43,6 +43,10 @@ struct BuildProfile {
     uintptr_t scoreSpaceTargetRva;
     uintptr_t shipLockAngleRva;
     uintptr_t shipLockUpdateRva;
+
+    // PlayerCharacter -> the skeleton's Camera bone, whose p-AttachLight child
+    // carries the helmet light.
+    uintptr_t playerCameraBoneOffset;
 };
 
 // One file per store, every build for that store inside it. Append new builds;

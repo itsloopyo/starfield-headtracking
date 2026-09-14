@@ -47,6 +47,7 @@ set(MOD_SOURCES
     src/game/steam_offsets.cpp
     src/game/ads_state.cpp
     src/game/base_fov.cpp
+    src/game/helmet_light.cpp
     src/hooks/input_hook.cpp
     src/game/game_state.cpp
     src/game/scene_layout.cpp
@@ -128,6 +129,9 @@ if(STARFIELDHT_BUILD_TESTS)
     add_executable(starfieldht_head_rotation_tests tests/head_rotation_tests.cpp)
     target_include_directories(starfieldht_head_rotation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME head_rotation COMMAND starfieldht_head_rotation_tests)
+    add_executable(starfieldht_head_attached_tests tests/head_attached_tests.cpp)
+    target_include_directories(starfieldht_head_attached_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    add_test(NAME head_attached COMMAND starfieldht_head_attached_tests)
 
     # Config validation is the one boundary that consumes a file the user edits
     # by hand, so its test links the real Config and the logger its warnings go

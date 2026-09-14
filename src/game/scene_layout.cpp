@@ -112,6 +112,7 @@ bool IsFrustum(const NiFrustum& f) {
 constexpr uintptr_t kMaxCameraScan   = 0x400;
 constexpr uintptr_t kMaxNodeScan     = 0x400;
 constexpr uintptr_t kMaxNiCameraScan = 0x220;
+constexpr uintptr_t kMaxParentScan   = 0x100;
 constexpr int       kMaxChildProbe   = 8;
 constexpr uintptr_t kScanStart       = 8;
 constexpr uintptr_t kScanStride      = 4;
@@ -398,6 +399,29 @@ bool ResolveSceneLayout(void* playerCamera) {
         if (localResidual > kMaxLocalResidual) localOffset = 0;
     }
 
+    // While a save is loading the camera root sits at identity, so the NiCamera's
+    // local and world transforms hold the same matrix and every test above passes
+    // for both assignments. Committing then took whichever came first in the scan,
+    // and with them swapped the head pose went into the world transform, the
+    // clean world transform was restored into the local one, and the camera spun
+    // and climbed away without end. The two only become distinguishable once the
+    // root has been placed, so wait for that.
+    if (localOffset != 0 && worldOffset != 0) {
+        NiMatrix44 local{}, world{};
+        constexpr float kMinDistinguishingDifference = 1e-4f;
+        if (SafeRead(niCamera + localOffset, local) && SafeRead(niCamera + worldOffset, world)
+            && ClipMismatch(local, world) < kMinDistinguishingDifference) {
+            static bool logged = false;
+            if (!logged) {
+                logged = true;
+                Logger::Instance().Info(
+                    "Scene layout: the camera's local and world transforms are identical (root not "
+                    "placed yet), so they cannot be told apart - retrying every camera update");
+            }
+            return false;
+        }
+    }
+
     if (localOffset == 0 || worldOffset == 0 || frustumOffset == 0 || clipOffset == 0) {
         // Reported once: this runs on every camera update until it succeeds, and
         // the float window below is 17 lines a call. A later success still says
@@ -421,7 +445,27 @@ bool ResolveSceneLayout(void* playerCamera) {
         return false;
     }
 
+    // The NiCamera's parent is the camera root, so the one slot near the top of
+    // the object that points back at it is the parent pointer.
+    uintptr_t parentOffset = 0;
+    for (uintptr_t o = kPointerSize; o < kMaxParentScan && parentOffset == 0; o += kPointerSize) {
+        uintptr_t p = 0;
+        if (ReadPtr(niCamera + o, p) && p == cameraRoot) parentOffset = o;
+    }
+    if (parentOffset == 0) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            Logger::Instance().Error("Scene layout: no parent pointer back to the camera root in the "
+                                     "first 0x%llX bytes of the NiCamera - staying dormant, retrying "
+                                     "every camera update",
+                                     static_cast<unsigned long long>(kMaxParentScan));
+        }
+        return false;
+    }
+
     g_layout.cameraRootOffset     = rootOffset;
+    g_layout.parentOffset         = parentOffset;
     g_layout.childrenDataOffset   = childrenOffset;
     g_layout.localTransformOffset = localOffset;
     g_layout.worldTransformOffset = worldOffset;
@@ -431,11 +475,12 @@ bool ResolveSceneLayout(void* playerCamera) {
     g_cameraChildIndex = childIndex;
 
     Logger::Instance().Info(
-        "Scene layout resolved: cameraRoot=+0x%llX children=+0x%llX childIndex=%d "
+        "Scene layout resolved: cameraRoot=+0x%llX children=+0x%llX parent=+0x%llX childIndex=%d "
         "local=+0x%llX (composition residual %.6f) world=+0x%llX clip=+0x%llX (error %.6f) "
         "frustum=+0x%llX",
         static_cast<unsigned long long>(rootOffset),
         static_cast<unsigned long long>(childrenOffset),
+        static_cast<unsigned long long>(parentOffset),
         childIndex,
         static_cast<unsigned long long>(localOffset), localResidual,
         static_cast<unsigned long long>(worldOffset),

@@ -35,6 +35,7 @@ extern constexpr BuildProfile kGdkProfile_20251129 = {
     0x15486F0,
     0x2121CE0,
     0x2154F90,
+    0xDF8,
 };
 
 // The initializer above is positional, so these pin the slots that are easy to

@@ -10,12 +10,15 @@ All notable changes to this project are documented here. The format follows
 
 - Steam support. Version 1.16.244.0 from Steam now gets the same head tracking,
   aim separation and crosshair placement as the Xbox app / Game Pass release.
+- The helmet light follows your head instead of your aim, turning 1.5 times as
+  far as your head turns.
 
 ### Changed
 
 - Head tracking pauses while the game's idle camera circles your character
   after you leave the controls alone.
 - Conversations keep head tracking on.
+- Fixed the view sometimes spinning and climbing away after loading a save.
 
 ## [0.0.0] - 2026-09-08
 

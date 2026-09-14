@@ -9,6 +9,7 @@
 #include "game/build_profile.h"
 #include "game/aim_projection.h"
 #include "game/game_state.h"
+#include "game/helmet_light.h"
 #include "game/scene_layout.h"
 #include "game/starfield_types.h"
 #include "camera_boundary.h"
@@ -351,6 +352,7 @@ void ReleaseTracking(uintptr_t niCamera, uintptr_t localOffset, const NiMatrix44
         SafeWrite(niCamera + localOffset, pristineLocal);
     }
     g_local.have = false;
+    ReleaseHelmetLight();
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
     PublishNoFrame();
     UpdateReticle();
@@ -418,6 +420,7 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
         return;
     }
     g_local.written = newLocal;
+    TrackHelmetLight(cleanBasis, drawn);
 
     // Nothing is written to the node's world transform or its clip matrix here:
     // the rebuild described above discards both, and that address is also the
