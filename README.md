@@ -12,7 +12,7 @@ An unofficial head tracking mod for Starfield that moves the view with your head
 
 ## Requirements
 
-- Starfield version 1.16.244.0, from Steam or from the Xbox app / PC Game Pass. Both
+- Starfield version 1.16.244.0, from Steam or from Xbox Game Pass. Both
   builds are supported. On any other version the mod stays inactive until it is
   updated.
 - A tracking source: [OpenTrack](https://github.com/opentrack/opentrack) with a webcam or a supported device, or a phone app that speaks the OpenTrack UDP protocol.
