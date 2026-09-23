@@ -21,8 +21,7 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
         }
     }
     // Preserve the gun's stock projection in the clean camera, then let head
-    // movement use the world projection. Stretching about the drawn eye would
-    // incorrectly scale a positional lean as well as the weapon.
+    // rotation use the world projection.
     const Mat3 adjusted = Mul(stretch, drawnView);
     const Mat3 inverse = Mul(Transpose(drawnView), inverseStretch);
     const float scale[3] = {scaleX, scaleY, 1.0f};
@@ -35,9 +34,11 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
         }
     }
     view.entry[3][3] = inverseView.entry[3][3] = 1.0f;
-    const float lean[3] = {drawn.e[0] - clean.e[0], drawn.e[1] - clean.e[1], drawn.e[2] - clean.e[2]};
-    MulRowVec(lean, inverseStretch, eye);
-    for (int i = 0; i < 3; ++i) eye[i] += clean.e[i];
+    // Drawn from the clean eye, so a lean leaves the weapon where it is. The
+    // weapon sits about a third of a metre from the eye, so the lean's honest
+    // parallax would throw it most of the way across the frame and take the
+    // sights off the eye while aiming.
+    for (int i = 0; i < 3; ++i) eye[i] = clean.e[i];
 }
 
 }

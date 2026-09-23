@@ -60,7 +60,6 @@ void Config::Validate() {
     toggleKey         = ValidVirtualKey(toggleKey, DEFAULT_TOGGLE_KEY, "ToggleKey");
     positionToggleKey = ValidVirtualKey(positionToggleKey, DEFAULT_POSITION_TOGGLE_KEY, "PositionToggleKey");
     yawModeKey        = ValidVirtualKey(yawModeKey, DEFAULT_YAW_MODE_KEY, "YawModeKey");
-    adsModeKey        = ValidVirtualKey(adsModeKey, DEFAULT_ADS_MODE_KEY, "AdsModeKey");
 }
 
 namespace {
@@ -183,7 +182,6 @@ int Config::ConfigHandler(void* user, const char* section, const char* name, con
     else if (MATCH("Hotkeys", "ToggleKey"))         { config->toggleKey         = WHOLE(config->toggleKey); }
     else if (MATCH("Hotkeys", "PositionToggleKey")) { config->positionToggleKey = WHOLE(config->positionToggleKey); }
     else if (MATCH("Hotkeys", "YawModeKey"))        { config->yawModeKey        = WHOLE(config->yawModeKey); }
-    else if (MATCH("Hotkeys", "AdsModeKey"))        { config->adsModeKey        = WHOLE(config->adsModeKey); }
 
     else if (MATCH("Position", "SensitivityX")) { config->positionSensitivityX = NUMBER(config->positionSensitivityX); }
     else if (MATCH("Position", "SensitivityY")) { config->positionSensitivityY = NUMBER(config->positionSensitivityY); }
@@ -282,8 +280,7 @@ bool Config::Save(const char* path) const {
     file << std::hex;
     file << "ToggleKey=0x" << toggleKey << "    ; End - Enable/disable\n";
     file << "PositionToggleKey=0x" << positionToggleKey << " ; Page Up - Cycle tracking mode\n";
-    file << "YawModeKey=0x" << yawModeKey << "        ; Page Down - Toggle world/local yaw\n";
-    file << "AdsModeKey=0x" << adsModeKey << "        ; Insert - Cycle what the sights do\n\n";
+    file << "YawModeKey=0x" << yawModeKey << "        ; Page Down - Toggle world/local yaw\n\n";
     // std::hex is sticky, so anything numeric added after this section would
     // otherwise be written in hex without the 0x that says so.
     file << std::dec;

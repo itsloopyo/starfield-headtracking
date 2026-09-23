@@ -4,7 +4,6 @@
 #include "core/logger.h"
 #include "core/rtti_utils.h"
 #include "game/camera_math.h"
-#include "game/ads_state.h"
 #include "game/base_fov.h"
 #include "game/build_profile.h"
 #include "game/aim_projection.h"
@@ -13,7 +12,6 @@
 #include "game/scene_layout.h"
 #include "game/starfield_types.h"
 #include "camera_boundary.h"
-#include "ui/reticle.h"
 
 #include <cameraunlock/camera/zoom_compensation.h>
 #include <cameraunlock/memory/pattern_scanner.h>
@@ -200,14 +198,6 @@ void PublishNoFrame() {
     g_frames.Publish(CameraFrame{});
 }
 
-// A frame the hook could not service. Everything downstream is told so, the
-// mark included: it is drawn from the last frame it was given, so leaving it
-// alone parks it on screen pointing at nothing.
-void HideFrame() {
-    PublishNoFrame();
-    UpdateReticle();
-}
-
 // The same, for a frame abandoned BEFORE the clean world transform was
 // published. That publication is retired too: left standing, a render worker
 // that has not consumed the previous token yet would restore last frame's clean
@@ -216,7 +206,7 @@ void HideFrame() {
 // hand the game a head-tracked transform to aim through.
 void AbandonFrame() {
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
-    HideFrame();
+    PublishNoFrame();
 }
 
 // Whether the head pose reaches the picture, and by how much, is not something
@@ -279,8 +269,7 @@ CameraBasis BuildCleanBasis(const NiMatrix44& pristineLocal, const NiMatrix44& r
 }
 
 // The head pose as it will be applied to this frame: already scaled for
-// whatever the game has done to the field of view, and already gated by what
-// the sights mode allows.
+// whatever the game has done to the field of view.
 struct HeadPose {
     float yaw = 0.0f, pitch = 0.0f, roll = 0.0f;
     float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -308,15 +297,6 @@ HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum) {
         pose.x *= pose.zoom;
         pose.y *= pose.zoom;
         pose.z *= pose.zoom;
-    }
-
-    // Roll turns the picture about the view axis and leaves the aim on the
-    // centre of it. Yaw, pitch and a lean all move the aim off centre, so
-    // dropping them is what makes the sight picture the stock one.
-    if (mod.GetEffectiveAdsMode() == AdsMode::StockRollOnly) {
-        pose.yaw = 0.0f;
-        pose.pitch = 0.0f;
-        pose.havePosition = false;
     }
     return pose;
 }
@@ -355,14 +335,13 @@ void ReleaseTracking(uintptr_t niCamera, uintptr_t localOffset, const NiMatrix44
     ReleaseHelmetLight();
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
     PublishNoFrame();
-    UpdateReticle();
 }
 
 void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     const SceneLayout& layout = GetSceneLayout();
     CameraReadout readout{};
     if (!ReadCamera(cameraRoot, niCamera, layout, readout)) {
-        // Without this the mark keeps being drawn at the screen position of
+        // Without this the crosshair keeps being drawn at the screen position of
         // the last frame that did read, welded there while the world moves
         // under it, for as long as the node cannot be read.
         AbandonFrame();
@@ -374,8 +353,6 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
 
     const Mat3 rootRot = RotationOf(readout.rootWorld);
     const CameraBasis cleanBasis = BuildCleanBasis(pristine, readout.rootWorld, rootRot);
-
-    AdsState::Update();
 
     Mod& mod = Mod::Instance();
     const bool active = mod.IsEnabled() && GameState::IsInGameplay();
@@ -435,7 +412,6 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
 
     LogApplyState(active, pose.haveRotation, pose.havePosition, pose.yaw, pose.pitch, pose.roll,
                   cleanBasis, drawn, readout.frustum, pose.zoom);
-    UpdateReticle();
 }
 
 // The structured-exception frame is kept in a function of its own so the work
@@ -451,10 +427,10 @@ void ApplyTrackingGuarded(uintptr_t cameraRoot, uintptr_t niCamera) {
         ApplyTracking(cameraRoot, niCamera);
     } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
         ReportException(GetExceptionCode());
-        // HideFrame, not AbandonFrame: the fault may have landed after the clean
+        // PublishNoFrame, not AbandonFrame: the fault may have landed after the clean
         // world transform was published, and that publication is this frame's
         // and correct.
-        HideFrame();
+        PublishNoFrame();
     }
 }
 

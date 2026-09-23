@@ -50,19 +50,16 @@ void RegisterBindings(const Config& config) {
     g_poller.AddHotkey(config.toggleKey,         NavGuarded([] { Mod::Instance().Toggle(); }));
     g_poller.AddHotkey(config.positionToggleKey, NavGuarded([] { Mod::Instance().CycleDofMode(); }));
     g_poller.AddHotkey(config.yawModeKey,        NavGuarded([] { Mod::Instance().ToggleYawMode(); }));
-    g_poller.AddHotkey(config.adsModeKey,        NavGuarded([] { Mod::Instance().CycleAdsMode(); }));
 
     // Ctrl+Shift+<letter> chord alternatives per the CameraUnlock standard:
-    // Y=Toggle, G=Position, H=yaw mode, U=4th toggle (sights mode).
+    // Y=Toggle, G=Position, H=yaw mode.
     g_poller.AddHotkey('Y', ChordGuarded([] { Mod::Instance().Toggle(); }));
     g_poller.AddHotkey('G', ChordGuarded([] { Mod::Instance().CycleDofMode(); }));
     g_poller.AddHotkey('H', ChordGuarded([] { Mod::Instance().ToggleYawMode(); }));
-    g_poller.AddHotkey('U', ChordGuarded([] { Mod::Instance().CycleAdsMode(); }));
 
 #if STARFIELDHT_DEV_HOTKEYS
     // Diagnostics: F8 cycles axis isolation, F6 dumps camera matrices, Delete
-    // records which game code reads the camera. The dump moved off Insert when
-    // that became the sights cycle.
+    // records which game code reads the camera.
     // (access_probe.cpp is only compiled into a dev build.)
     g_poller.AddHotkey(VK_F8, NavGuarded([] { Mod::Instance().CycleAxisIsolation(); }));
     g_poller.AddHotkey(VK_F6, NavGuarded([] { Mod::Instance().DumpMatrices(); }));

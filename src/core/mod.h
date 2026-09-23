@@ -1,7 +1,6 @@
 #pragma once
 
 #include "config.h"
-#include "game/ads_state.h"
 
 #include <cameraunlock/protocol/udp_receiver.h>
 #include <cameraunlock/tracking/head_tracking_session.h>
@@ -20,11 +19,6 @@ public:
 
     void CycleDofMode();
     void ToggleYawMode();
-    void CycleAdsMode();
-    AdsMode GetAdsMode() const { return m_adsMode.load(); }
-
-    // Hip fire is fully tracked in every mode.
-    AdsMode GetEffectiveAdsMode() const;
     bool IsWorldSpaceYaw() const { return m_worldSpaceYaw.load(); }
 
     // F8 cycles axis isolation for diagnostic testing.
@@ -77,8 +71,6 @@ private:
 
     // Yaw mode: true = horizon-locked (world), false = camera-local
     std::atomic<bool> m_worldSpaceYaw{true};
-
-    std::atomic<AdsMode> m_adsMode{AdsMode::TrackedWithMark};
 
     // Axis isolation for diagnostic testing (0=normal, 1=pitch, 2=yaw, 3=roll)
     std::atomic<int> m_axisIsolation{0};

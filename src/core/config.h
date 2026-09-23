@@ -29,7 +29,6 @@ struct Config {
     int toggleKey = DEFAULT_TOGGLE_KEY;
     int positionToggleKey = DEFAULT_POSITION_TOGGLE_KEY;
     int yawModeKey = DEFAULT_YAW_MODE_KEY;
-    int adsModeKey = DEFAULT_ADS_MODE_KEY;
 
     // Position settings (6DOF). No per-axis inversion: which way a tracker
     // calls positive is the tracker's to fix, once, in its own profile, and a

@@ -108,12 +108,11 @@ Look straight ahead and use your tracker's center control.
 Two equivalent binding sets - use whichever your keyboard has. The nav-cluster
 keys and the chords do exactly the same thing.
 
-| Action                   | Nav-cluster | Chord          |
-|--------------------------|-------------|----------------|
-| Toggle tracking          | `End`       | `Ctrl+Shift+Y` |
-| Cycle tracking mode      | `Page Up`   | `Ctrl+Shift+G` |
-| Toggle horizon lock      | `Page Down` | `Ctrl+Shift+H` |
-| Cycle what the sights do | `Insert`    | `Ctrl+Shift+U` |
+| Action              | Nav-cluster | Chord          |
+|---------------------|-------------|----------------|
+| Toggle tracking     | `End`       | `Ctrl+Shift+Y` |
+| Cycle tracking mode | `Page Up`   | `Ctrl+Shift+G` |
+| Toggle horizon lock | `Page Down` | `Ctrl+Shift+H` |
 
 `Page Up` / `Ctrl+Shift+G` cycles tracking mode:
 
@@ -122,17 +121,12 @@ keys and the chords do exactly the same thing.
 3. Rotational tracking disabled, positional tracking enabled
 4. Back to normal
 
-### What the sights do
+### Aiming down sights
 
-`Insert` / `Ctrl+Shift+U` cycles these modes while aiming down the sights.
-The default is **Tracked, mod reticle**. Hip fire keeps full head tracking.
-
-1. **Stock, roll only.** Head roll tilts the view. Turning and leaning are
-   paused until you lower the weapon.
-2. **Tracked, mod reticle.** Full head tracking down the sights, with the mod's
-   own mark drawn along the direction you are aiming.
-3. **Tracked, game reticle.** Full head tracking down the sights, with no extra
-   mark drawn. The game's own crosshair still follows your aim.
+Head tracking stays on while you aim. The weapon stays where your mouse or
+controller points it, so with your head turned it sits off to one side with its
+sights still lined up, and your rounds land where those sights point. Head
+movement is scaled to the zoom, so a scope does not magnify it.
 
 ### Ship aim UI
 
@@ -198,7 +192,6 @@ Enabled=true
 ToggleKey=0x23         ; End - Enable/disable head tracking
 PositionToggleKey=0x21 ; Page Up - Cycle tracking mode
 YawModeKey=0x22        ; Page Down - Toggle world/local yaw
-AdsModeKey=0x2D        ; Insert - Cycle what the sights do
 
 [General]
 ; Auto-enable tracking on game start
@@ -248,6 +241,9 @@ curves and axis inversion in your tracker so the same profile works across games
 - **An axis runs the wrong way.** Adjust axis inversion in your tracker.
   In OpenTrack, look under Options. If movement feels wrong while looking
   steeply up or down, try toggling horizon lock with `Page Down`.
+- **The weapon is off to one side when I aim down sights.** Your head is
+  turned: the weapon stays on your aim and you are looking past it. Turn back to
+  it, or move your aim to where you are looking.
 - **Nothing happens in game, and the log says there is no build profile.**
   Your game build is unsupported. Check the
   [Releases page](https://github.com/itsloopyo/starfield-headtracking/releases)

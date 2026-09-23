@@ -8,9 +8,7 @@
 #include "hooks/input_hook.h"
 #include "hooks/aim_hook.h"
 #include "hooks/weapon_hook.h"
-#include "game/ads_state.h"
 #include "game/build_profile.h"
-#include "ui/reticle.h"
 #include "ui/stock_reticle.h"
 
 namespace StarfieldHT {
@@ -173,12 +171,10 @@ void Mod::AnnounceStartup() {
     // Every binding, not just the toggle. The nav-cluster keys are unlabelled
     // in game and the log is the only place a user can read back what this
     // build is bound to.
-    Logger::Instance().Info("Hotkeys: %s=toggle, %s=cycle tracking mode, %s=yaw mode, "
-                            "%s=cycle what the sights do",
+    Logger::Instance().Info("Hotkeys: %s=toggle, %s=cycle tracking mode, %s=yaw mode",
                             VirtualKeyToString(m_config.toggleKey),
                             VirtualKeyToString(m_config.positionToggleKey),
-                            VirtualKeyToString(m_config.yawModeKey),
-                            VirtualKeyToString(m_config.adsModeKey));
+                            VirtualKeyToString(m_config.yawModeKey));
 }
 
 bool Mod::LoadConfig() {
@@ -344,24 +340,6 @@ void Mod::CycleDofMode() {
         mode == cameraunlock::TrackingMode::RotationAndPosition ? "6DOF (rotation + position)" :
         mode == cameraunlock::TrackingMode::RotationOnly ? "3DOF rotation only" :
         "3DOF position only");
-}
-
-AdsMode Mod::GetEffectiveAdsMode() const {
-    return AdsState::IsAiming() ? m_adsMode.load() : AdsMode::TrackedWithMark;
-}
-
-void Mod::CycleAdsMode() {
-    const AdsMode current = m_adsMode.load();
-    const AdsMode next =
-        current == AdsMode::StockRollOnly   ? AdsMode::TrackedWithMark :
-        current == AdsMode::TrackedWithMark ? AdsMode::TrackedNoMark :
-                                              AdsMode::StockRollOnly;
-    m_adsMode.store(next);
-
-    AnnounceMode("Sights",
-        next == AdsMode::StockRollOnly   ? "stock, roll only" :
-        next == AdsMode::TrackedWithMark ? "tracked, mod reticle" :
-                                           "tracked, game reticle");
 }
 
 void Mod::CycleAxisIsolation() {

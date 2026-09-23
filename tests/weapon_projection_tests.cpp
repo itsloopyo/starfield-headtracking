@@ -34,6 +34,7 @@ int main() {
                     float eye[3];
                     NiMatrix44 view{}, inverse{};
                     CompensateWeaponProjection(clean, drawn, scaleX, scaleY, eye, view, inverse);
+                    for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "weapon is drawn from the clean eye");
                     // The caller memcpys all 64 bytes of each matrix over the
                     // game's own, so the row and column the rotation does not
                     // write are part of the contract: a translation left in
@@ -57,18 +58,18 @@ int main() {
                             float relative[3], physical[3];
                             for (int i = 0; i < 3; ++i) {
                                 relative[i] = clean.e[i] + x * clean.r[i] + y * clean.u[i] + 2 * clean.f[i] - eye[i];
-                                physical[i] = clean.e[i] + x * scaleX * clean.r[i] + y * scaleY * clean.u[i]
-                                            + 2 * clean.f[i] - drawn.e[i];
+                                physical[i] = x * scaleX * clean.r[i] + y * scaleY * clean.u[i]
+                                            + 2 * clean.f[i];
                             }
                             float actual[3];
                             MulRowVec(relative, RotationOf(view), actual);
                             const float worldRight = 1.8f, worldTop = 0.5f;
                             Near(actual[0] / actual[2] / (worldRight / scaleX),
                                  Dot3(physical, drawn.r) / Dot3(physical, drawn.f) / worldRight,
-                                 "weapon horizontal projection follows world");
+                                 "weapon horizontal projection is the world's, seen from the clean eye");
                             Near(actual[1] / actual[2] / (worldTop / scaleY),
                                  Dot3(physical, drawn.u) / Dot3(physical, drawn.f) / worldTop,
-                                 "weapon vertical projection follows world");
+                                 "weapon vertical projection is the world's, seen from the clean eye");
                             if (angle == 0 && lean == 0) {
                                 Near(actual[0] / actual[2], x / 2, "neutral sight picture X");
                                 Near(actual[1] / actual[2], y / 2, "neutral sight picture Y");

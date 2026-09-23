@@ -45,13 +45,11 @@ set(MOD_SOURCES
     src/game/build_profile.cpp
     src/game/gdk_offsets.cpp
     src/game/steam_offsets.cpp
-    src/game/ads_state.cpp
     src/game/base_fov.cpp
     src/game/helmet_light.cpp
     src/hooks/input_hook.cpp
     src/game/game_state.cpp
     src/game/scene_layout.cpp
-    src/ui/reticle.cpp
     src/ui/stock_reticle.cpp
 )
 

@@ -19,6 +19,5 @@ inline constexpr float RAD_TO_DEG = 57.29578f;
 inline constexpr int DEFAULT_TOGGLE_KEY = 0x23;           // VK_END - Enable/disable tracking
 inline constexpr int DEFAULT_POSITION_TOGGLE_KEY = 0x21;  // VK_PRIOR (Page Up) - Cycle DOF mode
 inline constexpr int DEFAULT_YAW_MODE_KEY = 0x22;         // VK_NEXT (Page Down) - Toggle world/local yaw
-inline constexpr int DEFAULT_ADS_MODE_KEY = 0x2D;         // VK_INSERT - Cycle what the sights do
 
 } // namespace StarfieldHT

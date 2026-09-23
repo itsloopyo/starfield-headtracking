@@ -54,7 +54,6 @@ void OutOfRangeHotkeysFallBackToDefaults() {
     config.toggleKey = 0;
     config.positionToggleKey = -1;
     config.yawModeKey = 0xFF;
-    config.adsModeKey = 0x101;
     config.Validate();
 
     CheckEqual(config.toggleKey, StarfieldHT::DEFAULT_TOGGLE_KEY,
@@ -63,8 +62,6 @@ void OutOfRangeHotkeysFallBackToDefaults() {
                "a negative mode key falls back to the default");
     CheckEqual(config.yawModeKey, StarfieldHT::DEFAULT_YAW_MODE_KEY,
                "0xFF is past the end of the virtual key table");
-    CheckEqual(config.adsModeKey, StarfieldHT::DEFAULT_ADS_MODE_KEY,
-               "a key code wider than a byte falls back to the default");
 }
 
 void ValidHotkeysSurviveValidation() {
@@ -75,13 +72,11 @@ void ValidHotkeysSurviveValidation() {
     config.toggleKey = 0x01;
     config.positionToggleKey = 0x79; // VK_F10
     config.yawModeKey = 0xFE;        // the top of the range
-    config.adsModeKey = 'K';
     config.Validate();
 
     CheckEqual(config.toggleKey, 0x01, "0x01 is the bottom of the virtual key range");
     CheckEqual(config.positionToggleKey, 0x79, "a function key is left alone");
     CheckEqual(config.yawModeKey, 0xFE, "0xFE is a valid virtual key code");
-    CheckEqual(config.adsModeKey, 'K', "a letter key is left alone");
 }
 
 void DefaultsAreThemselvesValid() {
@@ -93,7 +88,6 @@ void DefaultsAreThemselvesValid() {
     CheckEqual(config.toggleKey, before.toggleKey, "validation does not move the default toggle key");
     CheckEqual(config.positionToggleKey, before.positionToggleKey, "validation does not move the default mode key");
     CheckEqual(config.yawModeKey, before.yawModeKey, "validation does not move the default yaw key");
-    CheckEqual(config.adsModeKey, before.adsModeKey, "validation does not move the default sights key");
     Check(config.udpPort == before.udpPort, "validation does not move the default UDP port");
     CheckNear(config.localSmoothing, before.localSmoothing, "validation does not move local smoothing");
     CheckNear(config.remoteSmoothing, before.remoteSmoothing, "validation does not move remote smoothing");
@@ -283,10 +277,31 @@ void ShippedIniCarriesEveryKeyTheWriterEmits() {
     CheckNear(loaded.remoteSmoothing, defaults.remoteSmoothing, "the shipped remote smoothing is the default");
     CheckNear(loaded.positionLimitZ, defaults.positionLimitZ, "the shipped forward lean limit is the default");
     CheckEqual(loaded.toggleKey, defaults.toggleKey, "the shipped toggle key is the default");
-    CheckEqual(loaded.adsModeKey, defaults.adsModeKey, "the shipped sights key is the default");
     Check(loaded.showCrosshair == defaults.showCrosshair, "the shipped crosshair setting is the default");
     Check(!defaults.shipAimUIFollowsHead && !loaded.shipAimUIFollowsHead,
           "the shipped and generated ship aim UI defaults anchor to the forward view");
+}
+
+// The sights cycle and its AdsModeKey binding are gone. An INI written by a
+// build that had them still carries the key, and it has to load as if the line
+// were not there.
+void RetiredSightsKeyIsIgnored() {
+    const std::string path = TempPath("retired-sights.ini");
+    if (!WriteFile(path, "[Hotkeys]\nToggleKey=0x79\nAdsModeKey=0x2D\nYawModeKey=0x22\n")) {
+        Check(false, "could not write the retired key fixture");
+        return;
+    }
+
+    StarfieldHT::Config config;
+    Check(config.Load(path.c_str()), "a file carrying AdsModeKey loads");
+    CheckEqual(config.toggleKey, 0x79, "keys around the retired one are still read");
+    CheckEqual(config.yawModeKey, 0x22, "keys after the retired one are still read");
+    Check(config.Save(path.c_str()), "the config saves over the old file");
+    std::ifstream saved(path);
+    const std::set<std::string> keys = KeysIn(saved);
+    saved.close();
+    Check(keys.count("Hotkeys/AdsModeKey") == 0, "the retired key drops out on the next save");
+    std::remove(path.c_str());
 }
 
 } // namespace
@@ -300,6 +315,7 @@ int main() {
     UnreadableValuesKeepThePreviousOne();
     CommonWordsForYesAndNoAreUnderstood();
     ShippedIniCarriesEveryKeyTheWriterEmits();
+    RetiredSightsKeyIsIgnored();
 
     if (g_failures != 0) {
         std::printf("%d config validation check(s) failed\n", g_failures);
