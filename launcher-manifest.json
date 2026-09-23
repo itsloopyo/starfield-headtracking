@@ -2,7 +2,7 @@
     "schema_version":  2,
     "mod_info":  {
                      "name":  "StarfieldHeadTracking",
-                     "version":  "0.0.1",
+                     "version":  "0.1.0",
                      "game_id":  "starfield"
                  },
     "strategy":  "AsiLoader",
