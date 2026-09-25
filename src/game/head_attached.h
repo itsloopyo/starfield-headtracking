@@ -2,6 +2,8 @@
 
 #include "game/camera_math.h"
 
+#include <cameraunlock/effects/head_follow_light.h>
+
 namespace StarfieldHT {
 
 inline Mat3 RotationAboutAxis(const float axis[3], float angle) {
@@ -26,7 +28,7 @@ inline Mat3 ScaleTurn(const Mat3& turn, float scale) {
     if (skew < 1e-6f) return turn;
     for (int i = 0; i < 3; ++i) axis[i] /= skew;
     const float angle = atan2f(0.5f * skew, 0.5f * (turn.m[0][0] + turn.m[1][1] + turn.m[2][2] - 1.0f));
-    return RotationAboutAxis(axis, angle * scale);
+    return RotationAboutAxis(axis, cameraunlock::effects::ScaleHeadAngle(angle, scale));
 }
 
 // The local transform that carries a node rigidly with the head: whatever turn

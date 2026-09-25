@@ -98,7 +98,8 @@ cfg::ConfigTable<Config> MakeConfigTable() {
     cfg::ConfigTable<Config> table = cfg::HeadTrackingConfigTable<Config>(
         {C::UdpPort, C::EnableOnStartup, C::WorldSpaceYaw, C::RotationEnabled, C::LocalSmoothing,
          C::RemoteSmoothing, C::PositionEnabled, C::PositionLimitX, C::PositionLimitY, C::PositionLimitYDown,
-         C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey, C::YawModeKey});
+         C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey, C::YawModeKey,
+         C::LightFollowsHead, C::LightMultiplier});
     table.Select(C::WorldSpaceYaw).Writable()
         .Comment("true: yaw turns around the world's up axis and a lean moves along the ground.\n"
                  "false: both follow the camera's own axes.")

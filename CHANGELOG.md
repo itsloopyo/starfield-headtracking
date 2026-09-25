@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows
   aim separation and crosshair placement as the Xbox app / Game Pass release.
 - The helmet light follows your head instead of your aim, turning 1.5 times as
   far as your head turns.
+- `LightFollowsHead` and `LightMultiplier` under `[Light]` in
+  `HeadTracking.ini`. `LightFollowsHead=false` leaves the helmet light on your
+  aim, and `LightMultiplier` sets how far it turns relative to your head: `1.0`
+  matches the view, `0` keeps it pointing along your aim.
 
 ### Changed
 

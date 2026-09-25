@@ -9,10 +9,10 @@ namespace StarfieldHT {
 // only ever reaches the render camera, so without this the beam stays on the
 // aim while the view turns away from it.
 //
-// Turns the attach node through 1.5 times the head's turn and leans it with the
-// eye. Called on the simulation thread, after the camera's own local transform
-// has been written.
-void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn);
+// Turns the attach node through `turnScale` times the head's turn and leans it
+// with the eye. Called on the simulation thread, after the camera's own local
+// transform has been written.
+void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn, float turnScale);
 
 // Hands the attach node back its own transform, on frames tracking contributes
 // nothing to.

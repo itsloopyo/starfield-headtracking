@@ -131,7 +131,10 @@ if(STARFIELDHT_BUILD_TESTS)
     target_include_directories(starfieldht_head_rotation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME head_rotation COMMAND starfieldht_head_rotation_tests)
     add_executable(starfieldht_head_attached_tests tests/head_attached_tests.cpp)
-    target_include_directories(starfieldht_head_attached_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(starfieldht_head_attached_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/cameraunlock-core/cpp/include
+    )
     add_test(NAME head_attached COMMAND starfieldht_head_attached_tests)
 
     # The committed HeadTracking.ini against the table, and the toggles' saves.

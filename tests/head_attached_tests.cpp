@@ -101,6 +101,14 @@ int main() {
     const NiMatrix44 leanWorld = Compose(HeadAttachedLocal(light, parent, clean, leaned, 1.5f), parent);
     near(leanWorld.entry[3][1] - cleanWorld.entry[3][1], 0.3f, "lean carried at 1:1");
 
+    // LightMultiplier=0 keeps the node on the aim and still carries it with the eye.
+    const NiMatrix44 pinned = Compose(HeadAttachedLocal(light, parent, clean, drawn, 0.0f), parent);
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c) near(pinned.entry[r][c], cleanWorld.entry[r][c], "0x turn keeps the node's rotation");
+    for (int i = 0; i < 3; ++i) {
+        near(pinned.entry[3][i] - cleanWorld.entry[3][i], drawn.e[i] - clean.e[i], "0x turn still carries the lean");
+    }
+
     if (failures == 0) std::printf("head_attached: all checks passed\n");
     return failures == 0 ? 0 : 1;
 }

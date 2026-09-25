@@ -22,9 +22,6 @@ constexpr uintptr_t kNameTextOffset = 0x18;
 constexpr char kBoneName[] = "Camera";
 constexpr char kAttachName[] = "p-AttachLight";
 
-// The beam turns half as far again as the head does.
-constexpr float kBeamTurnScale = 1.5f;
-
 // The children pointer is followed by three 16-bit counts, equal on every node
 // read so far. The smallest is taken, and every child is still checked against
 // its own parent pointer before it is used.
@@ -123,7 +120,7 @@ uintptr_t CurrentAttachNode() {
 
 } // namespace
 
-void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn) {
+void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn, float turnScale) {
     const SceneLayout& layout = GetSceneLayout();
     const uintptr_t node = CurrentAttachNode();
     if (node == 0) return;
@@ -137,7 +134,7 @@ void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn) {
         g_attach.have = true;
     }
 
-    const NiMatrix44 local = HeadAttachedLocal(g_attach.pristine, boneWorld, clean, drawn, kBeamTurnScale);
+    const NiMatrix44 local = HeadAttachedLocal(g_attach.pristine, boneWorld, clean, drawn, turnScale);
     if (SafeWrite(node + layout.localTransformOffset, local)) {
         g_attach.written = local;
     }
