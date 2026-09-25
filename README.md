@@ -8,6 +8,7 @@ An unofficial head tracking mod for Starfield that moves the view with your head
 
 - **Decoupled look and aim** - look around with your head while your mouse or controller controls aim. Ship lock-on acquisition follows your view.
 - **6DOF positional tracking** - lean, peek and duck as well as turning your head
+- **Helmet light follows your head** - the beam points where you look, not where you aim
 - **Works with any OpenTrack compatible tracker** - free options available for PC, iOS and Android
 
 ## Requirements
@@ -143,6 +144,20 @@ panels stay fixed on screen.
 Ship lock-on acquisition follows where you look. The target marker stays
 attached to the ship, but looking away can cause you to lose the lock.
 
+### Helmet light
+
+Your helmet light follows your head rather than your aim, and turns a little
+further than the view does. When you turn your head your eyes end up past the
+centre of the screen, so a beam matched to the view alone lands short of what
+you are looking at. Leaning carries the light with your eye.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `LightFollowsHead` | `true` | Point the light where you are looking. `false` leaves it on your aim |
+| `LightMultiplier` | `1.5` | How far it turns relative to your head. `1.0` matches the view, `0` keeps it pointing along your aim |
+
+Both are under `[Light]` in `HeadTracking.ini`.
+
 ## Configuration
 
 <!-- cameraunlock:config -->
@@ -212,8 +227,22 @@ ToggleKey=End, Ctrl+Shift+Y
 CycleTrackingModeKey=PageUp, Ctrl+Shift+G
 ; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
 YawModeKey=PageDown, Ctrl+Shift+H
+
+[Light]
+; true: a light you carry points where you look instead of where you aim.
+LightFollowsHead=true
+; How far the light turns for each degree your head turns.
+; 1 matches the view, 0 keeps the light on your aim.
+LightMultiplier=1.5
 ```
 <!-- /cameraunlock:config -->
+
+Earlier versions also read these settings, which this version no longer
+reads: `YawMultiplier`, `PitchMultiplier` and `RollMultiplier` under
+`[Sensitivity]`, `SensitivityX`, `SensitivityY` and `SensitivityZ` under
+`[Position]`, `[Crosshair] Show`, `[Ship] AimUIFollowsHead` and
+`[Hotkeys] AdsModeKey`. The game's crosshair and the ship's aim circle always
+follow your aim now, and head tracking stays on through the sights.
 
 `WorldSpaceYaw=true` (default) keeps "up" locked to the world horizon. Yawing
 while looking at the floor still pans left and right, and leaning still moves
@@ -284,9 +313,9 @@ pixi run package
 
 ## Community & Support
 
-- [Discord](https://discord.com/invite/dxyZdyFNT9) - setup help, bug reports, and new-release announcements
-- [Lopari](https://lopari.app) - free Windows launcher with one-click install and launch of head-tracking mods
-- [Headcam](https://headcam.app) - free app that turns your phone into a head tracker
+- Discord: [Loop's Head Tracking Hangout](https://discord.com/invite/dxyZdyFNT9) - setup help, bug reports, and new-release announcements
+- [Lopari](https://lopari.app) - free Windows launcher with one-click install and launch for the released head-tracking mods
+- [Headcam](https://headcam.app) - free app that turns your iPhone or Android phone into the head tracker
 
 ## License
 
