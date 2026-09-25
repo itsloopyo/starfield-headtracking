@@ -1,115 +1,123 @@
 #include "pch.h"
 #include "config.h"
-#include "logger.h"
+
 #include "legacy_config/legacy_config.h"
+
+#include <cameraunlock/config/head_tracking_config_table.h>
+#include <cameraunlock/input/key_bindings.h>
+#include <cameraunlock/tracking/tracking_mode.h>
+
+#include <utility>
+#include <vector>
 
 namespace StarfieldHT {
 
-// Inline member initializers on the Config struct are the single source of truth
-// for defaults. SetDefaults() resets the whole struct to its freshly-constructed state.
-void Config::SetDefaults() {
-    *this = Config{};
+namespace {
+
+namespace cfg = cameraunlock::config;
+using cameraunlock::input::KeyBinding;
+using cameraunlock::input::KeyModifiers;
+
+// A legacy hotkey code and the Ctrl+Shift chord the builds always registered beside it, as one
+// key list. A code outside 0x01-0xFE imports as unbound (N1); the frozen reader already put
+// every code it read back in that range.
+std::string KeyList(int vk, char letter, const char* key, std::vector<cfg::DroppedValue>& dropped) {
+    cfg::LegacyVirtualKeyToBindings(vk, "Hotkeys", key, dropped);
+    std::vector<KeyBinding> bindings;
+    if (vk >= 0x01 && vk <= 0xFE) bindings.push_back({KeyModifiers::kNone, vk});
+    bindings.push_back({KeyModifiers::kCtrl | KeyModifiers::kShift, letter});
+    return cameraunlock::input::FormatKeyBindings(bindings);
 }
 
-Config MapLegacyConfig(const legacy::Config& read) {
-    Config c;
-    c.udpPort = read.udpPort;
-    c.yawMultiplier = read.yawMultiplier;
-    c.pitchMultiplier = read.pitchMultiplier;
-    c.rollMultiplier = read.rollMultiplier;
-    c.localSmoothing = read.localSmoothing;
-    c.remoteSmoothing = read.remoteSmoothing;
-    c.toggleKey = read.toggleKey;
-    c.positionToggleKey = read.positionToggleKey;
-    c.yawModeKey = read.yawModeKey;
-    c.positionSensitivityX = read.positionSensitivityX;
-    c.positionSensitivityY = read.positionSensitivityY;
-    c.positionSensitivityZ = read.positionSensitivityZ;
-    c.positionLimitX = read.positionLimitX;
-    c.positionLimitY = read.positionLimitY;
-    c.positionLimitZ = read.positionLimitZ;
-    c.positionLimitZBack = read.positionLimitZBack;
-    c.positionEnabled = read.positionEnabled;
-    c.autoEnable = read.autoEnable;
-    c.worldSpaceYaw = read.worldSpaceYaw;
-    c.showCrosshair = read.showCrosshair;
-    c.shipAimUIFollowsHead = read.shipAimUIFollowsHead;
-    return c;
-}
-
-bool Config::Save(const char* path) const {
-    std::ofstream file(path);
-    if (!file.is_open()) {
-        Logger::Instance().Error("Failed to save config to %s", path);
-        return false;
+cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
+    legacy::Config c;
+    const legacy::ReadStatus status = legacy::Read(input.ansi_path.c_str(), c);
+    if (status == legacy::ReadStatus::OpenFailed) {
+        return cfg::ImportResult::Refused(
+            "the file could not be opened, so the mod runs on its default settings this session, "
+            "as the last version did");
     }
 
-    file << "; Starfield Head Tracking Configuration\n";
-    file << "; Delete this file to reset to defaults\n\n";
+    std::vector<cfg::DroppedValue> dropped;
+    std::vector<cfg::PoseShapingValue> shaping;
 
-    file << "[Network]\n";
-    file << "; UDP port for OpenTrack data (default: 4242)\n";
-    file << "UDPPort=" << udpPort << "\n\n";
+    out.udp_port = c.udpPort;
+    out.enable_on_startup = c.autoEnable;
+    out.world_space_yaw = c.worldSpaceYaw;
 
-    file << "[Sensitivity]\n";
-    file << "; Rotation sensitivity multipliers (1.0 = 1:1)\n";
-    file << "YawMultiplier=" << yawMultiplier << "\n";
-    file << "PitchMultiplier=" << pitchMultiplier << "\n";
-    file << "RollMultiplier=" << rollMultiplier << "\n";
-    file << "; Smoothing, applied to both rotation and position. The value is picked\n";
-    file << "; per connection from the packet source address.\n";
-    file << "; LocalSmoothing: tracker running on this machine (loopback).\n";
-    file << "; RemoteSmoothing: tracker on a remote network device (phone on WiFi).\n";
-    file << "; 0.0 = no smoothing, 1.0 = heavy. Raise for a noisier tracker - it\n";
-    file << "; costs perceived latency.\n";
-    file << "LocalSmoothing=" << localSmoothing << "\n";
-    file << "RemoteSmoothing=" << remoteSmoothing << "\n\n";
+    // [Position] Enabled chose only the mode the session started in: the cycle key reached
+    // every mode either way.
+    const cameraunlock::TrackingModeChannels mode = cameraunlock::EncodeTrackingMode(
+        c.positionEnabled ? cameraunlock::TrackingMode::RotationAndPosition
+                          : cameraunlock::TrackingMode::RotationOnly);
+    out.rotation_enabled = mode.rotation_enabled;
+    out.position_enabled = mode.position_enabled;
 
-    file << "[Position]\n";
-    file << "; Position tracking sensitivity (0.0-5.0). Leave at 1.0 and shape the pose in\n";
-    file << "; your tracker instead, so one profile behaves the same in every game.\n";
-    file << "SensitivityX=" << positionSensitivityX << "\n";
-    file << "SensitivityY=" << positionSensitivityY << "\n";
-    file << "SensitivityZ=" << positionSensitivityZ << "\n";
-    file << "; Position limits in meters (how far the camera can move)\n";
-    file << "LimitX=" << positionLimitX << "\n";
-    file << "LimitY=" << positionLimitY << "\n";
-    file << "LimitZ=" << positionLimitZ << "\n";
-    file << "; Backward lean limit (prevents camera clipping through player model)\n";
-    file << "LimitZBack=" << positionLimitZBack << "\n";
-    file << "; Enable/disable position tracking (6DOF)\n";
-    file << "Enabled=" << (positionEnabled ? "true" : "false") << "\n\n";
+    // The frozen reader held both to [0, 1] and every limit to [0.01, 0.5].
+    out.local_smoothing = c.localSmoothing;
+    out.position.local_smoothing = c.localSmoothing;
+    out.remote_smoothing = c.remoteSmoothing;
+    out.position.remote_smoothing = c.remoteSmoothing;
 
-    file << "[Hotkeys]\n";
-    file << "; Virtual key codes (hex)\n";
-    file << std::hex;
-    file << "ToggleKey=0x" << toggleKey << "    ; End - Enable/disable\n";
-    file << "PositionToggleKey=0x" << positionToggleKey << " ; Page Up - Cycle tracking mode\n";
-    file << "YawModeKey=0x" << yawModeKey << "        ; Page Down - Toggle world/local yaw\n\n";
-    // std::hex is sticky, so anything numeric added after this section would
-    // otherwise be written in hex without the 0x that says so.
-    file << std::dec;
+    // LimitY bounded both directions, so it becomes both explicit values.
+    out.position.limit_x = c.positionLimitX;
+    out.position.limit_y = c.positionLimitY;
+    out.position.limit_y_down = c.positionLimitY;
+    out.position.limit_z = c.positionLimitZ;
+    out.position.limit_z_back = c.positionLimitZBack;
 
-    file << "[General]\n";
-    file << "; Auto-enable tracking on game start\n";
-    file << "AutoEnable=" << (autoEnable ? "true" : "false") << "\n";
-    file << "; Horizon lock: true (default) turns head yaw about the world's up axis and\n";
-    file << "; moves a lean along the ground, whatever the camera is pitched or rolled to.\n";
-    file << "; false uses the camera's own axes for both.\n";
-    file << "WorldSpaceYaw=" << (worldSpaceYaw ? "true" : "false") << "\n\n";
+    // Every sensitivity shipped at 1.0, identity, so nothing moves into the axis conversion. A
+    // value the player changed is dropped.
+    const auto shape = [&](float value, float shipped, const char* section, const char* key) {
+        cfg::LegacyPoseShaping(value, shipped, section, key, shaping, dropped);
+    };
+    shape(c.yawMultiplier, legacy::kDefaultMultiplier, "Sensitivity", "YawMultiplier");
+    shape(c.pitchMultiplier, legacy::kDefaultMultiplier, "Sensitivity", "PitchMultiplier");
+    shape(c.rollMultiplier, legacy::kDefaultMultiplier, "Sensitivity", "RollMultiplier");
+    shape(c.positionSensitivityX, legacy::kDefaultPositionSensitivity, "Position", "SensitivityX");
+    shape(c.positionSensitivityY, legacy::kDefaultPositionSensitivity, "Position", "SensitivityY");
+    shape(c.positionSensitivityZ, legacy::kDefaultPositionSensitivity, "Position", "SensitivityZ");
 
-    file << "[Crosshair]\n";
-    file << "; Reposition the game's native crosshair to follow your aim once\n";
-    file << "; head tracking moves the view. Set false to leave it at centre.\n";
-    file << "Show=" << (showCrosshair ? "true" : "false") << "\n";
-    file << "\n[Ship]\n";
-    file << "; false anchors the aim circle to the forward view. true keeps it head-fixed.\n";
-    file << "; Restart the game after changing this setting.\n";
-    file << "AimUIFollowsHead=" << (shipAimUIFollowsHead ? "true" : "false") << "\n";
+    // The game's crosshair, and the ship's aim circle, now always follow the aim. A file that
+    // switched either off loses that switch.
+    if (!c.showCrosshair) dropped.push_back({cfg::DropRule::Reticle, "Crosshair", "Show", "false"});
+    if (c.shipAimUIFollowsHead) dropped.push_back({cfg::DropRule::Reticle, "Ship", "AimUIFollowsHead", "true"});
 
-    file.close();
-    Logger::Instance().Info("Config saved to %s", path);
-    return true;
+    out.toggle_key_name = KeyList(c.toggleKey, 'Y', "ToggleKey", dropped);
+    out.cycle_tracking_mode_key_name = KeyList(c.positionToggleKey, 'G', "PositionToggleKey", dropped);
+    out.yaw_mode_key_name = KeyList(c.yawModeKey, 'H', "YawModeKey", dropped);
+
+    return status == legacy::ReadStatus::Absent ? cfg::ImportResult::Absent(std::move(dropped), std::move(shaping))
+                                                : cfg::ImportResult::Imported(std::move(dropped), std::move(shaping));
+}
+
+} // namespace
+
+cfg::ConfigTable<Config> MakeConfigTable() {
+    using C = cfg::schema::Concept;
+    cfg::ConfigTable<Config> table = cfg::HeadTrackingConfigTable<Config>(
+        {C::UdpPort, C::EnableOnStartup, C::WorldSpaceYaw, C::RotationEnabled, C::LocalSmoothing,
+         C::RemoteSmoothing, C::PositionEnabled, C::PositionLimitX, C::PositionLimitY, C::PositionLimitYDown,
+         C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey, C::YawModeKey});
+    table.Select(C::WorldSpaceYaw).Writable()
+        .Comment("true: yaw turns around the world's up axis and a lean moves along the ground.\n"
+                 "false: both follow the camera's own axes.")
+        .Select(C::RotationEnabled).Writable()
+        .Select(C::PositionEnabled).Writable();
+    return table;
+}
+
+cfg::LegacyImport<Config> MakeLegacyImport() {
+    return {&Import, legacy::ReadKeys()};
+}
+
+cfg::ConfigOwnerOptions<Config> MakeConfigOwnerOptions(const std::wstring& path) {
+    cfg::ConfigOwnerOptions<Config> options;
+    options.path = path;
+    options.table = MakeConfigTable();
+    options.import = MakeLegacyImport();
+    options.header.display_name = kConfigDisplayName;
+    return options;
 }
 
 } // namespace StarfieldHT

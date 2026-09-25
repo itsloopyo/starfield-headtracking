@@ -19,6 +19,48 @@ All notable changes to this project are documented here. The format follows
   after you leave the controls alone.
 - Conversations keep head tracking on.
 - Fixed the view sometimes spinning and climbing away after loading a save.
+- `HeadTracking.ini` has a new layout. The first time this version starts, it
+  converts the file once into the new layout and keeps the file as it was
+  beside it as `HeadTracking.ini.pre-canonical`.
+  `HeadTracking.ini.pre-canonical.last`, when present, is the file as it was
+  before the most recent conversion: the mod converts the file again when it
+  finds the older layout later, for example after an older version of the mod
+  rewrote it.
+- Comments, and keys the mod never read, are not carried over. Nor are these,
+  where your old file had them:
+  - A sensitivity, scale, deadzone, response curve or axis inversion you
+    changed from its default. Set these in your tracker instead.
+  - Reticle settings, and a key that toggled the reticle.
+- Hotkeys are written as key names, and each hotkey lists every key that
+  triggers it, the Ctrl+Shift chord included: `ToggleKey=End, Ctrl+Shift+Y`.
+  The chords are ordinary entries now, so they can be rebound or removed.
+- An older version of the mod may not read the new layout correctly. It reads a
+  key that moved as its own default, and it can misread a hotkey or another
+  value that is now written as a name. To go back to an older version, first
+  copy `HeadTracking.ini.pre-canonical` back over `HeadTracking.ini`, which
+  restores the old file.
+- The tracking mode (Page Up) and horizon lock (Page Down) are saved to
+  `HeadTracking.ini` when you change them, and the game starts in them next
+  time. End still changes the current session only: head tracking starts on or
+  off as `EnableOnStartup` says.
+- `[Position] LimitY` bounded raising and lowering your head alike. It converts
+  into both `PositionLimitY` and `PositionLimitYDown`, which can now be set
+  apart.
+- Uninstalling leaves `HeadTracking.ini` in place, so your settings survive a
+  reinstall.
+
+### Removed
+
+- The sensitivity settings: `YawMultiplier`, `PitchMultiplier` and
+  `RollMultiplier` under `[Sensitivity]`, and `SensitivityX`, `SensitivityY`
+  and `SensitivityZ` under `[Position]`. Set these in your tracker app instead.
+  With these settings at their shipped defaults the camera moves as it did
+  before.
+- `[Crosshair] Show` and `[Ship] AimUIFollowsHead`. The game's crosshair and the
+  ship's aim circle always follow your aim.
+- `[Hotkeys] AdsModeKey`. Neither its key (Insert unless you changed it) nor
+  Ctrl+Shift+U cycles what the sights do any more: head tracking carries on
+  through the sights (be563fd).
 
 ## [0.0.0] - 2026-09-08
 

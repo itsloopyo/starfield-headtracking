@@ -188,9 +188,10 @@ New-Item -ItemType Directory -Path $stagingNexus -Force | Out-Null
 Copy-Item $asiPath -Destination $stagingNexus -Force
 Write-Host "  $modName.asi" -ForegroundColor Green
 
-# HeadTracking.ini is deliberately NOT shipped: Mod::LoadConfig writes it with
-# defaults on first launch if absent, so bundling it would overwrite the
-# user's tuned config every time they update the mod through Nexus.
+# HeadTracking.ini is deliberately NOT shipped: the mod creates it with
+# defaults on first launch if absent, and converts an older one in place, so
+# bundling it would put the stamped default over the user's tuned config every
+# time they update the mod through Nexus, and no conversion would run.
 #
 # Docs sit at the archive root (informational, not deployed to the game
 # folder). THIRD-PARTY-NOTICES travels with the binary for attribution of the

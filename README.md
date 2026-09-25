@@ -105,8 +105,10 @@ Look straight ahead and use your tracker's center control.
 
 ## Controls
 
-Two equivalent binding sets - use whichever your keyboard has. The nav-cluster
-keys and the chords do exactly the same thing.
+Two equivalent binding sets by default - use whichever your keyboard has. The
+nav-cluster keys and the chords do exactly the same thing. Each is an entry in
+the `[Hotkeys]` lists in `HeadTracking.ini`, so either can be rebound or
+removed there.
 
 | Action              | Nav-cluster | Chord          |
 |---------------------|-------------|----------------|
@@ -120,6 +122,10 @@ keys and the chords do exactly the same thing.
 2. Positional tracking disabled, rotational tracking enabled
 3. Rotational tracking disabled, positional tracking enabled
 4. Back to normal
+
+The tracking mode and horizon lock are saved to `HeadTracking.ini` when you
+change them, and the game starts in them next time. `End` changes the current
+session only: head tracking starts on or off as `EnableOnStartup` says.
 
 ### Aiming down sights
 
@@ -137,80 +143,77 @@ panels stay fixed on screen.
 Ship lock-on acquisition follows where you look. The target marker stays
 attached to the ship, but looking away can cause you to lose the lock.
 
-`AimUIFollowsHead` under `[Ship]` in `HeadTracking.ini` controls this behavior:
-
-- `false` (default): the circle stays aligned with the ship and moves across
-  the screen as you turn your head.
-- `true`: the circle stays in the same place on your screen as you turn your
-  head, following your view instead of staying aligned with the ship.
-
-Restart the game after changing this setting.
-
 ## Configuration
 
-`HeadTracking.ini` sits next to `Starfield.exe`. It is written with defaults on
-first launch; delete it to reset. Updating the mod never overwrites it.
+<!-- cameraunlock:config -->
+The mod reads its settings from `HeadTracking.ini` in the game folder, and creates the file when it starts and finds none. Edit it with any text editor.
+
+Earlier versions of the mod used an older layout for this file. The first time this version starts, it converts the file once into the layout below and keeps the file as it was beside it as `HeadTracking.ini.pre-canonical`. `HeadTracking.ini.pre-canonical.last`, when present, is the file as it was before the most recent conversion: the mod converts the file again when it finds the older layout later, for example after an older version of the mod rewrote it.
+
+Comments, and keys the mod never read, are not carried over. Nor are these, where your old file had them:
+
+- Reticle settings, and a key that toggled the reticle.
+- A sensitivity, scale, deadzone, response curve or axis inversion you changed from its default. Set these in your tracker instead.
+- The setting for a feature that earlier versions shipped switched off while it was untested. It now follows the mod's default.
+
+An older version of the mod may not read the new layout correctly. It reads a key that moved as its own default, and it can misread a hotkey or another value that is now written as a name. To go back to an older version, first copy `HeadTracking.ini.pre-canonical` back over `HeadTracking.ini`, which restores the old file.
+
+With every setting at its default, the file reads:
 
 ```ini
-[Network]
-; UDP port for OpenTrack data (default: 4242)
-UDPPort=4242
+; Starfield head tracking settings.
+; Comments start with ; and go on their own line. Text after a value is part of the value.
+; Hotkeys are key names such as End, PageUp or Ctrl+Shift+Y. Separate several with commas; leave empty for none.
 
-[Sensitivity]
-; Rotation sensitivity multipliers (1.0 = 1:1). Leave them at 1.0 and shape the
-; pose in your tracker instead, so one profile behaves the same in every game.
-YawMultiplier=1.0
-PitchMultiplier=1.0
-RollMultiplier=1.0
-; Smoothing, applied to both rotation and position. The value is picked
-; per connection from the packet source address.
-; LocalSmoothing: tracker running on this machine (loopback).
-; RemoteSmoothing: tracker on a remote network device (phone on WiFi).
-; 0.0 = no smoothing, 1.0 = heavy. Raise for a noisier tracker - it
-; costs perceived latency.
+[CameraUnlock]
+; Written by the mod. Leave this section in place.
+ConfigFormat=1
+
+[Network]
+; UDP port the mod receives tracker data on (OpenTrack protocol).
+UdpPort=4242
+
+[General]
+; true: head tracking is on when the game starts. ToggleKey turns it on and off.
+EnableOnStartup=true
+; true: yaw turns around the world's up axis and a lean moves along the ground.
+; false: both follow the camera's own axes.
+WorldSpaceYaw=true
+; true: turning your head turns the view.
+; Tracking mode at startup, with PositionEnabled. The mode hotkey changes both.
+RotationEnabled=true
+
+[Smoothing]
+; Smoothing when the tracker runs on this PC. 0 is the least, 1 the most.
 LocalSmoothing=0.0
+; Smoothing when the tracker is another device on the network, such as a phone.
+; 0 is the least, 1 the most.
 RemoteSmoothing=0.15
 
 [Position]
-; Position tracking sensitivity (0.0-5.0). Leave at 1.0 and shape the pose in
-; your tracker instead, so one profile behaves the same in every game.
-SensitivityX=1.0
-SensitivityY=1.0
-SensitivityZ=1.0
-; Position limits in meters (how far the camera can move). Nothing yet stops a
-; lean at a wall, so these stay small enough to keep the view inside the room.
-LimitX=0.30
-LimitY=0.20
-LimitZ=0.40
-; Backward lean limit (prevents camera clipping through player model)
-LimitZBack=0.10
-; Enable/disable position tracking (6DOF)
-Enabled=true
+; true: moving your head moves the view.
+; Tracking mode at startup, with RotationEnabled. The mode hotkey changes both.
+PositionEnabled=true
+; How far, in metres, leaning left or right can move the view.
+PositionLimitX=0.3
+; How far, in metres, raising your head can move the view.
+PositionLimitY=0.2
+; How far, in metres, lowering your head can move the view.
+PositionLimitYDown=0.2
+; How far, in metres, leaning forward can move the view.
+PositionLimitZ=0.4
+; How far, in metres, leaning back can move the view.
+PositionLimitZBack=0.1
 
 [Hotkeys]
-; Virtual key codes (hex)
-ToggleKey=0x23         ; End - Enable/disable head tracking
-PositionToggleKey=0x21 ; Page Up - Cycle tracking mode
-YawModeKey=0x22        ; Page Down - Toggle world/local yaw
-
-[General]
-; Auto-enable tracking on game start
-AutoEnable=true
-; Horizon lock: true (default) turns head yaw about the world's up axis and
-; moves a lean along the ground, whatever the camera is pitched or rolled to.
-; false uses the camera's own axes for both.
-WorldSpaceYaw=true
-
-[Crosshair]
-; Reposition the game's native crosshair to follow your aim once
-; head tracking moves the view. Set false to leave it at centre.
-Show=true
-
-[Ship]
-; false anchors the aim circle to the forward view. true keeps it head-fixed.
-; Restart the game after changing this setting.
-AimUIFollowsHead=false
+; Turns head tracking on and off.
+ToggleKey=End, Ctrl+Shift+Y
+; Changes the tracking mode: rotation and position, rotation only, position only.
+CycleTrackingModeKey=PageUp, Ctrl+Shift+G
+; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
+YawModeKey=PageDown, Ctrl+Shift+H
 ```
+<!-- /cameraunlock:config -->
 
 `WorldSpaceYaw=true` (default) keeps "up" locked to the world horizon. Yawing
 while looking at the floor still pans left and right, and leaning still moves
@@ -218,8 +221,9 @@ your eye across the ground rather than into it. Set it to `false` to use the
 camera's own axes for both, which is what you want if the camera is riding
 something that banks. Toggle it live with `Page Down`.
 
-Leave the sensitivity multipliers at `1.0` for 1:1 tracking. Configure response
-curves and axis inversion in your tracker so the same profile works across games.
+The mod applies the head pose as your tracker sends it. Set sensitivity,
+response curves and axis inversion in your tracker, so the same profile works
+across games.
 
 ## Troubleshooting
 
@@ -230,7 +234,7 @@ curves and axis inversion in your tracker so the same profile works across games
   `127.0.0.1:4242`. `HeadTracking.log` records `First tracker sample received`
   the moment anything arrives, along with whether the connection was classed as
   local or remote; if that line is absent the tracker is not reaching the game,
-  so confirm `UDPPort` matches and check Windows Firewall. For a phone app,
+  so confirm `UdpPort` matches and check Windows Firewall. For a phone app,
   use your PC's LAN address. If the log says the port could not be bound,
   close the other program using that port.
 - **Jittery or unstable tracking.** Raise the smoothing value your tracker
@@ -258,7 +262,8 @@ Download the new release and run `install.cmd` again. Your config is preserved.
 
 ## Uninstalling
 
-Run `uninstall.cmd`. This removes the mod files. The ASI loader is only removed
+Run `uninstall.cmd`. This removes the mod files and leaves `HeadTracking.ini`
+in place, so your settings survive a reinstall. The ASI loader is only removed
 if the installer put it there; if you already had your own, it is left alone.
 Use `uninstall.cmd /force` to remove it anyway.
 

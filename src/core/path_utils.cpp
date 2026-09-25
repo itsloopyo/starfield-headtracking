@@ -50,4 +50,30 @@ std::string GetModulePath(const char* filename) {
     return dir + filename;
 }
 
+std::wstring GetModulePathW(const wchar_t* filename) {
+    HMODULE hModule = nullptr;
+    if (!GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCWSTR>(&DummyAddress),
+            &hModule) || hModule == nullptr) {
+        return L"";
+    }
+
+    DWORD bufSize = MAX_PATH;
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        std::vector<wchar_t> buf(bufSize);
+        SetLastError(0);
+        const DWORD ret = GetModuleFileNameW(hModule, buf.data(), bufSize);
+        if (ret == 0) return L"";
+        if (ret < bufSize && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            const std::wstring path(buf.data(), ret);
+            const size_t lastSlash = path.find_last_of(L"\\/");
+            if (lastSlash == std::wstring::npos) return L"";
+            return path.substr(0, lastSlash + 1) + filename;
+        }
+        bufSize *= 2;
+    }
+    return L"";
+}
+
 } // namespace StarfieldHT

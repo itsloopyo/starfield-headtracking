@@ -36,7 +36,6 @@ set(MOD_SOURCES
     src/core/logger.cpp
     src/core/config.cpp
     src/legacy_config/legacy_config.cpp
-    src/core/hotkey_utils.cpp
     src/core/path_utils.cpp
     src/core/rtti_utils.cpp
     src/hooks/hook_manager.cpp
@@ -135,11 +134,11 @@ if(STARFIELDHT_BUILD_TESTS)
     target_include_directories(starfieldht_head_attached_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME head_attached COMMAND starfieldht_head_attached_tests)
 
-    # Config validation is the one boundary that consumes a file the user edits
-    # by hand, so its test links the real Config and the logger its warnings go
-    # through rather than a copy of the clamps.
+    # The committed HeadTracking.ini against the table, and the toggles' saves.
+    # `--render-config <path>` makes it write the committed file instead
+    # (pixi run render-config).
     add_executable(starfieldht_config_tests
-        tests/config_validation_tests.cpp
+        tests/config_tests.cpp
         src/core/config.cpp
         src/legacy_config/legacy_config.cpp
         src/core/logger.cpp
@@ -151,13 +150,10 @@ if(STARFIELDHT_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/extern
         ${CMAKE_CURRENT_SOURCE_DIR}/extern/minhook/include
     )
-    # The shipped ini is what an installer and the launcher's manifest seed both
-    # deploy, and the mod only writes its own when the file is absent, so the
-    # test compares the two key sets rather than trusting them to stay in step.
     target_compile_definitions(starfieldht_config_tests PRIVATE
-        STARFIELDHT_SHIPPED_INI="${CMAKE_CURRENT_SOURCE_DIR}/HeadTracking.ini")
+        SF_COMMITTED_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/HeadTracking.ini")
     target_link_libraries(starfieldht_config_tests PRIVATE cameraunlock)
-    add_test(NAME config_validation COMMAND starfieldht_config_tests)
+    add_test(NAME config_tests COMMAND starfieldht_config_tests)
 
     # The config differential test. The oracle is the dev pre-release's reader (d276538), the
     # newest published build, copied byte for byte into tests/config_differential/oracle with
@@ -181,6 +177,7 @@ if(STARFIELDHT_BUILD_TESTS)
 
     add_executable(starfieldht_config_differential
         tests/config_differential/differential_tests.cpp
+        src/core/config.cpp
         src/legacy_config/legacy_config.cpp
         src/core/logger.cpp
         src/core/path_utils.cpp
@@ -192,9 +189,17 @@ if(STARFIELDHT_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/extern/minhook/include
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential)
     target_compile_definitions(starfieldht_config_differential PRIVATE
-        SF_DIFFERENTIAL_INPUTS="${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/inputs")
+        SF_DIFFERENTIAL_INPUTS="${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/inputs"
+        SF_COMMITTED_CONFIG="${CMAKE_CURRENT_SOURCE_DIR}/HeadTracking.ini")
     target_link_libraries(starfieldht_config_differential PRIVATE cameraunlock sf_config_oracle)
     add_test(NAME config_differential COMMAND starfieldht_config_differential)
+
+    # Core's canonical config lint over the committed file and every file the differential
+    # test migrated, which it writes beside itself under migrated\.
+    add_test(NAME config_lint COMMAND node
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/lint-migrated.mjs
+        $<TARGET_FILE_DIR:starfieldht_config_differential>/migrated)
+    set_tests_properties(config_lint PROPERTIES DEPENDS config_differential)
 
     # The frozen reader, the core sources it compiles, the oracle and the inputs against the
     # hashes tests/config_differential/frozen.tsv records.

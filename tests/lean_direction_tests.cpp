@@ -65,14 +65,12 @@ void UpIsNotInvertedAndLateralIs() {
               "the tracker's positive lateral offset moves the camera left");
 }
 
-// Drives the real processor through the mod's own Config -> PositionSettings
-// mapping, rather than a second copy of it in the test. The copy had already
-// drifted: it never set limit_y_down, so the one place the vertical clamp is
-// mirrored was the one place no test reached.
+// Drives the real processor with the position settings the mod hands it, the
+// Config's own, rather than a second copy of them in the test.
 StarfieldHT::NiPoint3 SaturatedLean(const StarfieldHT::Config& config,
                                     float rawX, float rawY, float rawZ) {
     cameraunlock::PositionProcessor processor;
-    processor.SetSettings(StarfieldHT::ToPositionSettings(config));
+    processor.SetSettings(config.position);
     const cameraunlock::PositionData raw(rawX, rawY, rawZ);
     // Two ticks so the exponential smoothing has settled on the clamped value.
     cameraunlock::math::Vec3 out = processor.Process(raw, cameraunlock::math::Quat4::Identity(), 1.0f);
@@ -90,20 +88,18 @@ void LeanBudgetsAreNotReversed() {
               "leaning back gets the 0.10m budget");
 }
 
-// The vertical clamp is [-limit_y_down, +limit_y] and limit_y_down carries its
-// own default, so the mapping has to mirror the one configured vertical limit
-// into it. Left unset, raising LimitY widened standing up only and ducking
-// stayed pinned wherever the library's default happened to sit.
-void VerticalBudgetIsMirrored() {
-    // Driven through a RAISED limit, not the default: PositionSettings defaults
-    // limit_y_down to the same 0.20 the config does, so at the default value
-    // this passes whether or not the mapping mirrors the field.
+// The vertical clamp is [-limit_y_down, +limit_y], and PositionLimitY and
+// PositionLimitYDown are separate rows, so each direction gets its own budget.
+// Driven through two different raised limits: at the defaults both are 0.20,
+// and the test would pass with the two swapped or one copied into the other.
+void VerticalBudgetsAreTheirOwn() {
     StarfieldHT::Config raised;
-    raised.positionLimitY = 0.35f;
+    raised.position.limit_y = 0.35f;
+    raised.position.limit_y_down = 0.15f;
     CheckNear(Up(SaturatedLean(raised, 0.0f, 1.0f, 0.0f)), 0.35f * StarfieldHT::UNITS_PER_METER,
-              "standing up gets the configured vertical budget");
-    CheckNear(Up(SaturatedLean(raised, 0.0f, -1.0f, 0.0f)), -0.35f * StarfieldHT::UNITS_PER_METER,
-              "ducking gets the same budget as standing up");
+              "standing up gets PositionLimitY");
+    CheckNear(Up(SaturatedLean(raised, 0.0f, -1.0f, 0.0f)), -0.15f * StarfieldHT::UNITS_PER_METER,
+              "ducking gets PositionLimitYDown");
 }
 
 } // namespace
@@ -112,7 +108,7 @@ int main() {
     ForwardLeanMovesCameraForward();
     UpIsNotInvertedAndLateralIs();
     LeanBudgetsAreNotReversed();
-    VerticalBudgetIsMirrored();
+    VerticalBudgetsAreTheirOwn();
 
     if (g_failures != 0) {
         std::printf("%d check(s) failed\n", g_failures);

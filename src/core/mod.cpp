@@ -2,8 +2,6 @@
 #include "mod.h"
 #include "logger.h"
 #include "path_utils.h"
-#include "hotkey_utils.h"
-#include "legacy_config/legacy_config.h"
 #include "hooks/hook_manager.h"
 #include "hooks/camera_hook.h"
 #include "hooks/input_hook.h"
@@ -11,6 +9,8 @@
 #include "hooks/weapon_hook.h"
 #include "game/build_profile.h"
 #include "ui/stock_reticle.h"
+
+#include <cameraunlock/tracking/tracking_mode.h>
 
 namespace StarfieldHT {
 
@@ -66,9 +66,7 @@ bool Mod::Initialize() {
 
     Logger::Instance().Info("Starfield Head Tracking v%s initializing...", VERSION);
 
-    if (!LoadConfig()) {
-        Logger::Instance().Warning("Using default configuration");
-    }
+    LoadConfig();
 
     // An unrecognised build leaves the mod completely dormant. Only some of the
     // hooks are pinned to profile RVAs; the camera hook resolves PlayerCamera
@@ -93,11 +91,11 @@ bool Mod::Initialize() {
 
     StartReceiver();
 
-    const bool enabled = m_config.autoEnable;
+    const bool enabled = m_config.enable_on_startup;
     m_enabled.store(enabled);
     Logger::Instance().Info(enabled
-        ? "Head tracking auto-enabled at startup"
-        : "Head tracking disabled at startup (auto-enable is off)");
+        ? "Head tracking on at startup"
+        : "Head tracking off at startup (EnableOnStartup is false)");
 
     m_initialized.store(true);
     AnnounceStartup();
@@ -105,29 +103,20 @@ bool Mod::Initialize() {
 }
 
 void Mod::ApplyRotationSettings() {
-    cameraunlock::SensitivitySettings sensitivity;
-    sensitivity.yaw = m_config.yawMultiplier;
-    sensitivity.pitch = m_config.pitchMultiplier;
-    sensitivity.roll = m_config.rollMultiplier;
-    m_session.GetProcessor().SetSensitivity(sensitivity);
+    Logger::Instance().Info("TrackingProcessor initialized with smoothing local %.2f/remote %.2f",
+                            m_config.local_smoothing, m_config.remote_smoothing);
 
-    Logger::Instance().Info("TrackingProcessor initialized with sensitivity: yaw=%.2f pitch=%.2f roll=%.2f smoothing=local %.2f/remote %.2f",
-                            sensitivity.yaw, sensitivity.pitch, sensitivity.roll,
-                            m_config.localSmoothing, m_config.remoteSmoothing);
-
-    m_worldSpaceYaw.store(m_config.worldSpaceYaw);
+    m_worldSpaceYaw.store(m_config.world_space_yaw);
     Logger::Instance().Info("Yaw mode: %s", m_worldSpaceYaw.load() ? "horizon-locked (world)" : "camera-local");
 }
 
 void Mod::ApplyPositionSettings() {
-    // Tracking mode seeds from the legacy positionEnabled config: true -> full
-    // 6DOF, false -> rotation only. Position-only is reachable from either
-    // start via the cycle hotkey.
-    m_session.SetMode(m_config.positionEnabled
-        ? cameraunlock::TrackingMode::RotationAndPosition
-        : cameraunlock::TrackingMode::RotationOnly);
+    // The table never loads a pair that names no mode: it reads both as their
+    // defaults instead.
+    m_session.SetMode(cameraunlock::DecodeTrackingMode(m_config.rotation_enabled,
+                                                       m_config.position_enabled).value());
 
-    const cameraunlock::PositionSettings posSettings = ToPositionSettings(m_config);
+    const cameraunlock::PositionSettings& posSettings = m_config.position;
     m_session.GetPositionProcessor().SetSettings(posSettings);
 
     // Smoothing goes in after SetSettings, which would otherwise overwrite it.
@@ -136,21 +125,24 @@ void Mod::ApplyPositionSettings() {
     // IsRemoteConnection(), re-read on every Update().
     static_assert(decltype(m_session)::kHasRemoteConnection,
                   "receiver must expose IsRemoteConnection() or smoothing silently stays local");
-    m_session.SetLocalSmoothing(m_config.localSmoothing);
-    m_session.SetRemoteSmoothing(m_config.remoteSmoothing);
+    m_session.SetLocalSmoothing(m_config.local_smoothing);
+    m_session.SetRemoteSmoothing(m_config.remote_smoothing);
 
-    Logger::Instance().Info("Position processor initialized (%s, sens=%.1f/%.1f/%.1f, limits=%.2f/%.2f/%.2f)",
-                            m_session.GetMode() == cameraunlock::TrackingMode::RotationAndPosition ? "6DOF" : "3DOF rotation",
-                            posSettings.sensitivity_x, posSettings.sensitivity_y, posSettings.sensitivity_z,
-                            posSettings.limit_x, posSettings.limit_y, posSettings.limit_z);
+    const cameraunlock::TrackingMode mode = m_session.GetMode();
+    Logger::Instance().Info("Position processor initialized (%s, limits x=%.2f up=%.2f down=%.2f forward=%.2f back=%.2f)",
+                            mode == cameraunlock::TrackingMode::RotationAndPosition ? "6DOF" :
+                            mode == cameraunlock::TrackingMode::RotationOnly ? "3DOF rotation only" :
+                            "3DOF position only",
+                            posSettings.limit_x, posSettings.limit_y, posSettings.limit_y_down,
+                            posSettings.limit_z, posSettings.limit_z_back);
 }
 
 void Mod::StartReceiver() {
     m_udpReceiver.SetLog([](const std::string& msg) {
         Logger::Instance().Info("%s", msg.c_str());
     });
-    if (m_udpReceiver.Start(m_config.udpPort)) {
-        Logger::Instance().Info("UDP receiver started on port %d", m_config.udpPort);
+    if (m_udpReceiver.Start(static_cast<uint16_t>(m_config.udp_port))) {
+        Logger::Instance().Info("UDP receiver started on port %d", m_config.udp_port);
         return;
     }
     // Not a word here about WHY the bind failed. The receiver has already
@@ -162,7 +154,7 @@ void Mod::StartReceiver() {
     Logger::Instance().Warning("UDP port %d is not available yet - the bind error above says why. "
                                "The mod stays loaded and retries twice a second, so tracking starts "
                                "within about half a second of the port coming free, with no restart",
-                               m_config.udpPort);
+                               m_config.udp_port);
 }
 
 void Mod::AnnounceStartup() {
@@ -172,41 +164,44 @@ void Mod::AnnounceStartup() {
     // Every binding, not just the toggle. The nav-cluster keys are unlabelled
     // in game and the log is the only place a user can read back what this
     // build is bound to.
-    Logger::Instance().Info("Hotkeys: %s=toggle, %s=cycle tracking mode, %s=yaw mode",
-                            VirtualKeyToString(m_config.toggleKey),
-                            VirtualKeyToString(m_config.positionToggleKey),
-                            VirtualKeyToString(m_config.yawModeKey));
+    Logger::Instance().Info("Hotkeys: toggle=[%s] cycle tracking mode=[%s] yaw mode=[%s]",
+                            m_config.toggle_key_name.c_str(),
+                            m_config.cycle_tracking_mode_key_name.c_str(),
+                            m_config.yaw_mode_key_name.c_str());
 }
 
-bool Mod::LoadConfig() {
-    std::string configPath = GetModulePath("HeadTracking.ini");
+void Mod::LoadConfig() {
+    namespace cfg = cameraunlock::config;
+    const std::wstring configPath = GetModulePathW(L"HeadTracking.ini");
     if (configPath.empty()) {
         // Module directory lookup failed - refuse to fall back to a CWD-relative
         // config, since that would silently read/write the wrong file.
-        Logger::Instance().Error("Could not resolve module directory for HeadTracking.ini - using built-in defaults");
-        m_config.SetDefaults();
-        return false;
+        Logger::Instance().Error("Could not resolve module directory for HeadTracking.ini - using "
+                                 "built-in defaults, and nothing is saved this session");
+        m_config = MakeConfigTable().defaults();
+        return;
     }
 
-    legacy::Config read;
-    const legacy::ReadStatus status = legacy::Read(configPath.c_str(), read);
-    m_config = MapLegacyConfig(read);
-    // Seed a config only when there is genuinely no file. An antivirus scanning a
-    // freshly launched game directory or an editor holding the file open both
-    // leave it unopenable, and writing defaults there destroys settings the user
-    // tuned.
-    if (status == legacy::ReadStatus::Absent) {
-        m_config.Save(configPath.c_str());
-        return false;
-    }
-    if (status == legacy::ReadStatus::OpenFailed) {
-        Logger::Instance().Warning(
-            "HeadTracking.ini exists but could not be read (error %lu) - running on defaults "
-            "for this session and leaving the file alone", GetLastError());
-        return false;
-    }
+    m_configOwner.emplace(MakeConfigOwnerOptions(configPath));
+    const cfg::ConfigLoadResult<Config> loaded = m_configOwner->Load();
+    for (const std::string& line : loaded.log) Logger::Instance().Info("%s", line.c_str());
+    Logger::Instance().Info("Config: %s", cfg::ConfigLoadStatusName(loaded.status));
+    if (!loaded.reason.empty()) Logger::Instance().Warning("%s", loaded.reason.c_str());
+    // Every status hands back the settings to run on. A file the last version
+    // could not open ran it on its defaults, and a LegacyRefused load gives
+    // exactly those.
+    m_config = loaded.config;
+}
 
-    return true;
+void Mod::SaveToggle(const std::function<void(Config&)>& change) {
+    if (!m_configOwner) {
+        Logger::Instance().Warning("Not saved: HeadTracking.ini has no known folder this session");
+        return;
+    }
+    const cameraunlock::config::ConfigSaveResult saved = m_configOwner->Save(change);
+    if (saved.status == cameraunlock::config::ConfigSaveStatus::Saved) return;
+    for (const std::string& line : saved.log) Logger::Instance().Info("%s", line.c_str());
+    Logger::Instance().Warning("%s", saved.reason.c_str());
 }
 
 // False means the mod must not run at all. Only two things reach that: MinHook
@@ -342,6 +337,11 @@ void Mod::CycleDofMode() {
         mode == cameraunlock::TrackingMode::RotationAndPosition ? "6DOF (rotation + position)" :
         mode == cameraunlock::TrackingMode::RotationOnly ? "3DOF rotation only" :
         "3DOF position only");
+    const cameraunlock::TrackingModeChannels channels = cameraunlock::EncodeTrackingMode(mode);
+    SaveToggle([channels](Config& c) {
+        c.rotation_enabled = channels.rotation_enabled;
+        c.position_enabled = channels.position_enabled;
+    });
 }
 
 void Mod::CycleAxisIsolation() {
@@ -358,6 +358,7 @@ void Mod::ToggleYawMode() {
     const bool worldSpace = !m_worldSpaceYaw.load();
     m_worldSpaceYaw.store(worldSpace);
     AnnounceMode("Yaw mode", worldSpace ? "horizon-locked (world)" : "camera-local");
+    SaveToggle([worldSpace](Config& c) { c.world_space_yaw = worldSpace; });
 }
 
 void Mod::LogTrackerConnection() {

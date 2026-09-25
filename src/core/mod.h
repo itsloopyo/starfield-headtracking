@@ -2,8 +2,12 @@
 
 #include "config.h"
 
+#include <cameraunlock/config/config_owner.h>
 #include <cameraunlock/protocol/udp_receiver.h>
 #include <cameraunlock/tracking/head_tracking_session.h>
+
+#include <functional>
+#include <optional>
 
 namespace StarfieldHT {
 
@@ -27,7 +31,6 @@ public:
 
     void DumpMatrices();
 
-    Config& GetConfig() { return m_config; }
     const Config& GetConfig() const { return m_config; }
 
     // Get processed (smoothed) rotation values for rendering
@@ -49,7 +52,7 @@ private:
     Mod() = default;
     ~Mod() = default;
 
-    bool LoadConfig();
+    void LoadConfig();
     void ApplyRotationSettings();
     void ApplyPositionSettings();
     void StartReceiver();
@@ -58,10 +61,17 @@ private:
 
     static void AnnounceMode(const char* label, const char* value);
 
+    // Writes a toggle's new state to HeadTracking.ini, after the toggle has applied it.
+    void SaveToggle(const std::function<void(Config&)>& change);
+
     std::atomic<bool> m_enabled{false};
     std::atomic<bool> m_initialized{false};
 
     Config m_config;
+    // The one reader and writer of HeadTracking.ini. Empty only when the mod's own folder
+    // could not be resolved, and then nothing is saved this session. The hotkey thread saves
+    // through it after LoadConfig has built it on the init thread.
+    std::optional<cameraunlock::config::ConfigOwner<Config>> m_configOwner;
     cameraunlock::UdpReceiver m_udpReceiver;
     // Shared per-frame pipeline (interpolation, processing, 6DOF, mode cycling).
     // Updated at most once per cache window from GetProcessedRotation;

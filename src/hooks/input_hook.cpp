@@ -2,16 +2,21 @@
 #include "input_hook.h"
 #include "core/mod.h"
 #include "core/logger.h"
-#include "core/hotkey_utils.h"
 #if STARFIELDHT_DEV_HOTKEYS
 #include "core/access_probe.h"
 #include "core/object_finder.h"
 #include "game/hud_probe.h"
+#include <cameraunlock/input/chord_hotkeys.h>
 #endif
 #include "hooks/camera_hook.h"
 
 #include <cameraunlock/input/hotkey_poller.h>
-#include <cameraunlock/input/chord_hotkeys.h>
+#include <cameraunlock/input/key_binding_registration.h>
+#include <cameraunlock/input/key_bindings.h>
+
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 // Extra logging hotkeys, off in a shipped build and not something a player
 // needs. Configure with -DSTARFIELDHT_DEV_HOTKEYS=ON to re-arm them.
@@ -40,24 +45,25 @@ cameraunlock::input::HotkeyPoller g_poller;
 std::atomic<bool> g_running{false};
 bool g_bindingsRegistered = false;
 
+// The config table already refused a list that does not parse, so one here is
+// a bug rather than a player's typo.
+std::vector<cameraunlock::input::KeyBinding> Parse(const std::string& list) {
+    cameraunlock::input::KeyBindingsParseResult parsed = cameraunlock::input::ParseKeyBindings(list);
+    if (!parsed.ok()) throw std::logic_error("hotkey list '" + list + "' does not parse: " + parsed.error);
+    return parsed.bindings;
+}
+
 void RegisterBindings(const Config& config) {
-    using cameraunlock::input::NavGuarded;
-    using cameraunlock::input::ChordGuarded;
-
-    // Nav-cluster bindings (configurable via HeadTracking.ini). NavGuarded
-    // suppresses them while Ctrl+Shift is held so a single keypress can't fire
-    // two actions on layouts where a chord letter aliases a nav-cluster scancode.
-    g_poller.AddHotkey(config.toggleKey,         NavGuarded([] { Mod::Instance().Toggle(); }));
-    g_poller.AddHotkey(config.positionToggleKey, NavGuarded([] { Mod::Instance().CycleDofMode(); }));
-    g_poller.AddHotkey(config.yawModeKey,        NavGuarded([] { Mod::Instance().ToggleYawMode(); }));
-
-    // Ctrl+Shift+<letter> chord alternatives per the CameraUnlock standard:
-    // Y=Toggle, G=Position, H=yaw mode.
-    g_poller.AddHotkey('Y', ChordGuarded([] { Mod::Instance().Toggle(); }));
-    g_poller.AddHotkey('G', ChordGuarded([] { Mod::Instance().CycleDofMode(); }));
-    g_poller.AddHotkey('H', ChordGuarded([] { Mod::Instance().ToggleYawMode(); }));
+    // Each list from HeadTracking.ini, chords included. A plain key does not
+    // fire while Ctrl and Shift are both held, so Ctrl+Shift with a key reaches
+    // only a binding that names the chord.
+    using cameraunlock::input::RegisterKeyBindings;
+    RegisterKeyBindings(g_poller, Parse(config.toggle_key_name), [] { Mod::Instance().Toggle(); });
+    RegisterKeyBindings(g_poller, Parse(config.cycle_tracking_mode_key_name), [] { Mod::Instance().CycleDofMode(); });
+    RegisterKeyBindings(g_poller, Parse(config.yaw_mode_key_name), [] { Mod::Instance().ToggleYawMode(); });
 
 #if STARFIELDHT_DEV_HOTKEYS
+    using cameraunlock::input::NavGuarded;
     // Diagnostics: F8 cycles axis isolation, F6 dumps camera matrices, Delete
     // records which game code reads the camera.
     // (access_probe.cpp is only compiled into a dev build.)
@@ -101,8 +107,7 @@ bool InstallInputHook() {
     }
     g_running.store(true);
 
-    Logger::Instance().Info("Input hook installed - Toggle: %s",
-        VirtualKeyToString(config.toggleKey));
+    Logger::Instance().Info("Input hook installed - Toggle: [%s]", config.toggle_key_name.c_str());
 
     return true;
 }

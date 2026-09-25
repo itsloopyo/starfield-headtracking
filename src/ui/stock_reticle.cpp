@@ -261,8 +261,7 @@ void PositionReticle(uintptr_t menu) {
     double x = baseX, y = baseY;
     CameraFrame frame;
     const Mod& mod = Mod::Instance();
-    const bool active = mod.GetConfig().showCrosshair && mod.IsEnabled()
-                     && GameState::IsInGameplay() && GetCameraFrame(frame);
+    const bool active = mod.IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(frame);
     if (active) {
         double offsetX = 0, offsetY = 0;
         if (!ReticleOffset(movie, root, frame, offsetX, offsetY)) {
@@ -373,8 +372,7 @@ void SerializeShipHudFloat(SerializeHudFloat original, uintptr_t object, uintptr
         const Mod& mod = Mod::Instance();
         CameraFrame frame{};
         float nx = 0, ny = 0;
-        if (!mod.GetConfig().shipAimUIFollowsHead && mod.IsEnabled()
-            && GameState::IsInGameplay() && GetCameraFrame(frame)
+        if (mod.IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(frame)
             && ProjectAimDirection(frame, nx, ny)) {
             // The target is already projected through the tracked camera. The
             // reticle container adds its offset after the HUD blends this point
@@ -478,7 +476,7 @@ uint64_t CaptureShipMovie(uintptr_t movie, bool onlyChanges) {
     const Mod& mod = Mod::Instance();
     CameraFrame frame{};
     if (movie != g_shipMovie.load(std::memory_order_relaxed)
-        || mod.GetConfig().shipAimUIFollowsHead || !mod.IsEnabled()
+        || !mod.IsEnabled()
         || !GameState::IsInGameplay() || !GetCameraFrame(frame)) {
         return g_captureOriginal(movie, onlyChanges);
     }
@@ -585,8 +583,6 @@ bool InstallShipReticleHook() {
         Logger::Instance().Error("Ship capture hook: %s", MH_StatusToString(captureStatus));
         return false;
     }
-    Logger::Instance().Info("Ship aim UI: %s", Mod::Instance().GetConfig().shipAimUIFollowsHead
-        ? "head-fixed" : "anchored to the forward view");
     g_stickDataVtable = FindVtableByRTTI(base, moduleSize, ".?AV?$TUIDataToFlash@UStickData@@@@");
     const uintptr_t floatVtable = FindVtableByRTTI(base, moduleSize, ".?AV?$TUIValue@M@@");
     if (!g_stickDataVtable || !floatVtable) {
