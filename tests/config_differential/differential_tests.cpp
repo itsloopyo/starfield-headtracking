@@ -24,7 +24,8 @@
 // Inputs: no file, an empty file, the HeadTracking.ini the dev pre-release shipped (its
 // installer ZIP's plugins\HeadTracking.ini and its launcher seed are the same bytes, and the
 // only version of the file committed up to it), the file that build writes at first launch
-// when there is none (extracted once into inputs/), and core's corpus over the shipped file.
+// when there is none (extracted once into inputs/), core's corpus over the shipped file, and
+// the shipped file with all three hotkeys on each code from 0x01 to 0xFE.
 // v0.0.1 is a tag with no release; its reader, its shipped file and its core pin are the dev
 // build's.
 
@@ -672,6 +673,32 @@ std::string ReadInput(const std::string& file) {
     return ReadBytes(Widen(std::string(SF_DIFFERENTIAL_INPUTS) + "/" + file));
 }
 
+// `text` with the value of its one `key=` line replaced, the rest of that line included.
+std::string WithValue(const std::string& text, const std::string& key, const std::string& value) {
+    const size_t at = text.find("\n" + key + "=");
+    if (at == std::string::npos || text.find("\n" + key + "=", at + 1) != std::string::npos) {
+        throw std::logic_error("the shipped file does not hold exactly one " + key + " line");
+    }
+    const size_t start = at + 1 + key.size() + 1;
+    const size_t end = text.find_first_of("\r\n", start);
+    return text.substr(0, start) + value + text.substr(end);
+}
+
+// Every hotkey code the frozen reader accepts, 0x01 to 0xFE, on all three hotkeys at once. The
+// corpus tries one alternate code per hotkey; this is where the codes the key table has no name
+// for, or names only as a modifier (0x10-0x12), have to come through the migration as keys.
+std::vector<std::pair<std::string, std::string>> EveryHotkeyCode(const std::string& shipped) {
+    std::vector<std::pair<std::string, std::string>> inputs;
+    for (int vk = 0x01; vk <= 0xFE; ++vk) {
+        char code[8];
+        std::snprintf(code, sizeof(code), "0x%02X", static_cast<unsigned>(vk));
+        std::string bytes = shipped;
+        for (const char* key : {"ToggleKey", "PositionToggleKey", "YawModeKey"}) bytes = WithValue(bytes, key, code);
+        inputs.emplace_back(std::string("every hotkey ") + code, bytes);
+    }
+    return inputs;
+}
+
 // A file that exists and cannot be opened: the published build ran on its defaults and left it
 // alone, the import reports it as such, and the owner defers it on the defaults, saving
 // nothing that session.
@@ -794,7 +821,11 @@ int main() {
         const std::vector<IniMutation> corpus = GenerateIniMutations(shipped, legacy::ReadKeys(), CorpusKeys());
         for (const IniMutation& m : corpus) RunInput(folders, "corpus: " + m.name, m.bytes, tally);
 
-        std::printf("%zu inputs, %zu of them from the corpus\n", inputs.size() + 1 + corpus.size(), corpus.size());
+        const auto codes = EveryHotkeyCode(shipped);
+        for (const auto& [name, bytes] : codes) RunInput(folders, name, bytes, tally);
+
+        std::printf("%zu inputs, %zu of them from the corpus and %zu with every hotkey on one code\n",
+                    inputs.size() + 1 + corpus.size() + codes.size(), corpus.size(), codes.size());
         std::printf("comparison 1, the published build against the frozen reader:\n");
         for (const ListedDifference& d : kComparisonOneDifferences) {
             std::printf("  %s (%s): %d inputs\n    %s\n", d.id, d.commit, d.seen, d.what);

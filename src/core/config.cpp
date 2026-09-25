@@ -19,14 +19,12 @@ using cameraunlock::input::KeyBinding;
 using cameraunlock::input::KeyModifiers;
 
 // A legacy hotkey code and the Ctrl+Shift chord the builds always registered beside it, as one
-// key list. A code outside 0x01-0xFE imports as unbound (N1); the frozen reader already put
-// every code it read back in that range.
+// key list.
 std::string KeyList(int vk, char letter, const char* key, std::vector<cfg::DroppedValue>& dropped) {
-    cfg::LegacyVirtualKeyToBindings(vk, "Hotkeys", key, dropped);
-    std::vector<KeyBinding> bindings;
-    if (vk >= 0x01 && vk <= 0xFE) bindings.push_back({KeyModifiers::kNone, vk});
-    bindings.push_back({KeyModifiers::kCtrl | KeyModifiers::kShift, letter});
-    return cameraunlock::input::FormatKeyBindings(bindings);
+    const std::string code = cfg::LegacyVirtualKeyToBindings(vk, "Hotkeys", key, dropped);
+    const std::string chord =
+        cameraunlock::input::FormatKeyBindings({KeyBinding{KeyModifiers::kCtrl | KeyModifiers::kShift, letter}});
+    return code.empty() ? chord : code + ", " + chord;
 }
 
 cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
