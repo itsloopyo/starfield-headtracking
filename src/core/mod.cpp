@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "path_utils.h"
 #include "hotkey_utils.h"
+#include "legacy_config/legacy_config.h"
 #include "hooks/hook_manager.h"
 #include "hooks/camera_hook.h"
 #include "hooks/input_hook.h"
@@ -187,20 +188,21 @@ bool Mod::LoadConfig() {
         return false;
     }
 
-    if (!m_config.Load(configPath.c_str())) {
-        m_config.SetDefaults();
-        // Seed a config only when there is genuinely no file. inih reports the
-        // same failure for "no such file" and "could not be opened", and an
-        // antivirus scanning a freshly launched game directory or an editor
-        // holding the file open both land in the second case - writing defaults
-        // there destroys settings the user tuned.
-        if (GetFileAttributesA(configPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-            m_config.Save(configPath.c_str());
-        } else {
-            Logger::Instance().Warning(
-                "HeadTracking.ini exists but could not be read (error %lu) - running on defaults "
-                "for this session and leaving the file alone", GetLastError());
-        }
+    legacy::Config read;
+    const legacy::ReadStatus status = legacy::Read(configPath.c_str(), read);
+    m_config = MapLegacyConfig(read);
+    // Seed a config only when there is genuinely no file. An antivirus scanning a
+    // freshly launched game directory or an editor holding the file open both
+    // leave it unopenable, and writing defaults there destroys settings the user
+    // tuned.
+    if (status == legacy::ReadStatus::Absent) {
+        m_config.Save(configPath.c_str());
+        return false;
+    }
+    if (status == legacy::ReadStatus::OpenFailed) {
+        Logger::Instance().Warning(
+            "HeadTracking.ini exists but could not be read (error %lu) - running on defaults "
+            "for this session and leaving the file alone", GetLastError());
         return false;
     }
 

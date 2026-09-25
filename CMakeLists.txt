@@ -35,6 +35,7 @@ set(MOD_SOURCES
     src/core/mod.cpp
     src/core/logger.cpp
     src/core/config.cpp
+    src/legacy_config/legacy_config.cpp
     src/core/hotkey_utils.cpp
     src/core/path_utils.cpp
     src/core/rtti_utils.cpp
@@ -140,6 +141,7 @@ if(STARFIELDHT_BUILD_TESTS)
     add_executable(starfieldht_config_tests
         tests/config_validation_tests.cpp
         src/core/config.cpp
+        src/legacy_config/legacy_config.cpp
         src/core/logger.cpp
         src/core/path_utils.cpp
         extern/ini.c
@@ -156,4 +158,46 @@ if(STARFIELDHT_BUILD_TESTS)
         STARFIELDHT_SHIPPED_INI="${CMAKE_CURRENT_SOURCE_DIR}/HeadTracking.ini")
     target_link_libraries(starfieldht_config_tests PRIVATE cameraunlock)
     add_test(NAME config_validation COMMAND starfieldht_config_tests)
+
+    # The config differential test. The oracle is the dev pre-release's reader (d276538), the
+    # newest published build, copied byte for byte into tests/config_differential/oracle with
+    # the logger and path helpers it links; renaming its namespace lets it link beside this
+    # build's. oracle_adapter.cpp copies its Config out for the test. inih is compiled once,
+    # into the test: extern/ini.c has not changed since that build.
+    set(SF_ORACLE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/oracle)
+    add_library(sf_config_oracle STATIC
+        ${SF_ORACLE_DIR}/src/core/config.cpp
+        ${SF_ORACLE_DIR}/src/core/logger.cpp
+        ${SF_ORACLE_DIR}/src/core/path_utils.cpp
+        tests/config_differential/oracle_adapter.cpp
+    )
+    target_include_directories(sf_config_oracle PRIVATE
+        ${SF_ORACLE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/minhook/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential)
+    target_compile_definitions(sf_config_oracle PRIVATE StarfieldHT=sf_oracle)
+    target_link_libraries(sf_config_oracle PRIVATE cameraunlock)
+
+    add_executable(starfieldht_config_differential
+        tests/config_differential/differential_tests.cpp
+        src/legacy_config/legacy_config.cpp
+        src/core/logger.cpp
+        src/core/path_utils.cpp
+        extern/ini.c
+    )
+    target_include_directories(starfieldht_config_differential PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/minhook/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential)
+    target_compile_definitions(starfieldht_config_differential PRIVATE
+        SF_DIFFERENTIAL_INPUTS="${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/inputs")
+    target_link_libraries(starfieldht_config_differential PRIVATE cameraunlock sf_config_oracle)
+    add_test(NAME config_differential COMMAND starfieldht_config_differential)
+
+    # The frozen reader, the core sources it compiles, the oracle and the inputs against the
+    # hashes tests/config_differential/frozen.tsv records.
+    add_test(NAME config_frozen COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+        -File ${CMAKE_CURRENT_SOURCE_DIR}/tests/config_differential/check-frozen.ps1)
 endif()

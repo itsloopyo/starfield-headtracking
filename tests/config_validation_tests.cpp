@@ -1,5 +1,6 @@
 // Behaviour lock for the config boundary: an INI the user has hand-edited
-// becoming values the rest of the mod trusts.
+// becoming values the rest of the mod trusts. The reader is the frozen one in
+// src/legacy_config/, which is what an old file is still read through.
 //
 // The hotkey half is the one with a bug behind it. Hotkey codes are parsed with
 // strtol on base 0, so anything at all reaches the poller: a negative number, a
@@ -22,8 +23,11 @@
 
 #include "core/config.h"
 #include "core/constants.h"
+#include "legacy_config/legacy_config.h"
 
 namespace {
+
+using StarfieldHT::legacy::Config;
 
 int g_failures = 0;
 
@@ -46,15 +50,44 @@ void CheckNear(float actual, float expected, const char* what) {
     ++g_failures;
 }
 
+std::string TempPath(const char* leaf) {
+    std::string path = "starfieldht_config_test_";
+    path += leaf;
+    return path;
+}
+
+bool WriteFile(const std::string& path, const std::string& body) {
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out.is_open()) return false;
+    out << body;
+    return true;
+}
+
+bool Load(const std::string& path, Config& config) {
+    return StarfieldHT::legacy::Read(path.c_str(), config) == StarfieldHT::legacy::ReadStatus::Read;
+}
+
+bool Save(const Config& config, const std::string& path) {
+    return StarfieldHT::MapLegacyConfig(config).Save(path.c_str());
+}
+
+// Reads a file holding `body`, so a test drives the parser and the clamps together.
+Config ReadBody(const char* leaf, const std::string& body) {
+    const std::string path = TempPath(leaf);
+    Config config;
+    if (!WriteFile(path, body) || !Load(path, config)) {
+        Check(false, "could not write and read a fixture");
+    }
+    std::remove(path.c_str());
+    return config;
+}
+
 void OutOfRangeHotkeysFallBackToDefaults() {
     // 0 is what an empty or unparsable value produces, -1 what a bare "-1"
     // does, and 0x101 what a code past the end of the virtual key table looks
     // like. None of them can ever fire.
-    StarfieldHT::Config config;
-    config.toggleKey = 0;
-    config.positionToggleKey = -1;
-    config.yawModeKey = 0xFF;
-    config.Validate();
+    const Config config = ReadBody("hotkeys-out.ini",
+        "[Hotkeys]\nToggleKey=0\nPositionToggleKey=-1\nYawModeKey=0xFF\n");
 
     CheckEqual(config.toggleKey, StarfieldHT::DEFAULT_TOGGLE_KEY,
                "a zero toggle key falls back to the default");
@@ -65,25 +98,22 @@ void OutOfRangeHotkeysFallBackToDefaults() {
 }
 
 void ValidHotkeysSurviveValidation() {
-    StarfieldHT::Config config;
     // 0x01 is the bottom of the range GetAsyncKeyState defines, not a binding
     // anybody should choose; what is locked here is that the floor does not
-    // drift upward and start rejecting codes that do fire.
-    config.toggleKey = 0x01;
-    config.positionToggleKey = 0x79; // VK_F10
-    config.yawModeKey = 0xFE;        // the top of the range
-    config.Validate();
+    // drift upward and start rejecting codes that do fire. 0x79 is VK_F10 and
+    // 0xFE the top of the range.
+    const Config config = ReadBody("hotkeys-in.ini",
+        "[Hotkeys]\nToggleKey=0x01\nPositionToggleKey=0x79\nYawModeKey=0xFE\n");
 
     CheckEqual(config.toggleKey, 0x01, "0x01 is the bottom of the virtual key range");
     CheckEqual(config.positionToggleKey, 0x79, "a function key is left alone");
     CheckEqual(config.yawModeKey, 0xFE, "0xFE is a valid virtual key code");
 }
 
+// An empty file reads as the defaults, so validation moves none of them.
 void DefaultsAreThemselvesValid() {
-    StarfieldHT::Config config;
-    config.SetDefaults();
-    const StarfieldHT::Config before = config;
-    config.Validate();
+    const Config config = ReadBody("empty.ini", "");
+    const Config before;
 
     CheckEqual(config.toggleKey, before.toggleKey, "validation does not move the default toggle key");
     CheckEqual(config.positionToggleKey, before.positionToggleKey, "validation does not move the default mode key");
@@ -99,18 +129,10 @@ void DefaultsAreThemselvesValid() {
 // limits are metres of eye travel with nothing sweeping the level geometry yet,
 // so the ceiling is what keeps a lean inside the room the player is standing in.
 void NumericSettingsAreClamped() {
-    StarfieldHT::Config config;
-    config.yawMultiplier = 99.0f;
-    config.pitchMultiplier = -4.0f;
-    config.rollMultiplier = 99.0f;
-    config.localSmoothing = 5.0f;
-    config.remoteSmoothing = -1.0f;
-    config.positionSensitivityX = 99.0f;
-    config.positionLimitX = 9.0f;
-    config.positionLimitY = 9.0f;
-    config.positionLimitZ = 9.0f;
-    config.positionLimitZBack = 9.0f;
-    config.Validate();
+    const Config config = ReadBody("clamped.ini",
+        "[Sensitivity]\nYawMultiplier=99\nPitchMultiplier=-4\nRollMultiplier=99\n"
+        "LocalSmoothing=5\nRemoteSmoothing=-1\n"
+        "[Position]\nSensitivityX=99\nLimitX=9\nLimitY=9\nLimitZ=9\nLimitZBack=9\n");
 
     CheckNear(config.yawMultiplier, 3.0f, "yaw sensitivity is clamped to its ceiling");
     CheckNear(config.pitchMultiplier, 0.1f, "pitch sensitivity is clamped to its floor");
@@ -124,21 +146,6 @@ void NumericSettingsAreClamped() {
     CheckNear(config.positionLimitZBack, 0.5f, "the backward lean limit is clamped to 0.5m");
 }
 
-std::string TempPath(const char* leaf) {
-    std::string path = "starfieldht_config_test_";
-    path += leaf;
-    return path;
-}
-
-bool WriteFile(const std::string& path, const std::string& body) {
-    std::ofstream out(path, std::ios::out | std::ios::trunc);
-    if (!out.is_open()) return false;
-    out << body;
-    return true;
-}
-
-// Everything above drives Validate() on fields assigned directly, which is the
-// half of the boundary that never touches the parser. These drive the parser.
 void FileValuesReachTheStruct() {
     const std::string path = TempPath("good.ini");
     if (!WriteFile(path,
@@ -152,8 +159,8 @@ void FileValuesReachTheStruct() {
         return;
     }
 
-    StarfieldHT::Config config;
-    Check(config.Load(path.c_str()), "a well-formed file loads");
+    Config config;
+    Check(Load(path, config), "a well-formed file loads");
     Check(config.udpPort == 5510, "the port comes from the file");
     CheckNear(config.localSmoothing, 0.25f, "local smoothing comes from the file");
     CheckNear(config.positionLimitZ, 0.35f, "the forward lean limit comes from the file");
@@ -161,9 +168,9 @@ void FileValuesReachTheStruct() {
     Check(!config.worldSpaceYaw, "the yaw mode comes from the file");
     Check(!config.showCrosshair, "the crosshair setting comes from the file");
     Check(config.shipAimUIFollowsHead, "the ship aim UI can follow the head");
-    Check(config.Save(path.c_str()), "the selected ship aim UI mode saves");
-    StarfieldHT::Config reloaded;
-    Check(reloaded.Load(path.c_str()), "the saved configuration reloads");
+    Check(Save(config, path), "the selected ship aim UI mode saves");
+    Config reloaded;
+    Check(Load(path, reloaded), "the saved configuration reloads");
     Check(reloaded.shipAimUIFollowsHead, "the selected ship aim UI mode survives a round trip");
     std::remove(path.c_str());
 }
@@ -179,9 +186,9 @@ void UnreadableValuesKeepThePreviousOne() {
         return;
     }
 
-    const StarfieldHT::Config defaults;
-    StarfieldHT::Config config;
-    Check(config.Load(path.c_str()), "a file with unreadable values still loads");
+    const Config defaults;
+    Config config;
+    Check(Load(path, config), "a file with unreadable values still loads");
     CheckNear(config.positionLimitZ, defaults.positionLimitZ,
               "a comma decimal separator does not become a one-centimetre lean");
     CheckNear(config.positionLimitX, defaults.positionLimitX,
@@ -200,8 +207,8 @@ void CommonWordsForYesAndNoAreUnderstood() {
         return;
     }
 
-    StarfieldHT::Config config;
-    Check(config.Load(path.c_str()), "the word fixture loads");
+    Config config;
+    Check(Load(path, config), "the word fixture loads");
     Check(config.positionEnabled, "\"yes\" reads as true");
     Check(!config.autoEnable, "\"OFF\" reads as false");
     std::remove(path.c_str());
@@ -270,8 +277,8 @@ void ShippedIniCarriesEveryKeyTheWriterEmits() {
 
     // And the values in it are the defaults, so a user who deletes the file
     // gets back what they were shipped.
-    StarfieldHT::Config loaded;
-    Check(loaded.Load(STARFIELDHT_SHIPPED_INI), "the shipped config parses");
+    Config loaded;
+    Check(Load(STARFIELDHT_SHIPPED_INI, loaded), "the shipped config parses");
     Check(loaded.udpPort == defaults.udpPort, "the shipped port is the default");
     CheckNear(loaded.localSmoothing, defaults.localSmoothing, "the shipped local smoothing is the default");
     CheckNear(loaded.remoteSmoothing, defaults.remoteSmoothing, "the shipped remote smoothing is the default");
@@ -292,11 +299,11 @@ void RetiredSightsKeyIsIgnored() {
         return;
     }
 
-    StarfieldHT::Config config;
-    Check(config.Load(path.c_str()), "a file carrying AdsModeKey loads");
+    Config config;
+    Check(Load(path, config), "a file carrying AdsModeKey loads");
     CheckEqual(config.toggleKey, 0x79, "keys around the retired one are still read");
     CheckEqual(config.yawModeKey, 0x22, "keys after the retired one are still read");
-    Check(config.Save(path.c_str()), "the config saves over the old file");
+    Check(Save(config, path), "the config saves over the old file");
     std::ifstream saved(path);
     const std::set<std::string> keys = KeysIn(saved);
     saved.close();
