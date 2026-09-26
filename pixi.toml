@@ -32,8 +32,9 @@ install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1 R
 test = { cmd = "ctest --test-dir build -C Release --output-on-failure", depends-on = ["build-release"] }
 uninstall = "scripts\\uninstall.cmd"
 
-# Rewrites HeadTracking.ini, the committed config, from the config table after a change to a
-# row, a comment or a default, then re-encodes the launcher seed from it. The config tests
+# Rewrites HeadTracking.ini, the committed config and the table's fresh render (the
+# CameraUnlock.ini a first launch creates), after a change to a row, a comment or a default,
+# then the config descriptor's per_game in launcher-manifest.json from it. The config tests
 # fail until it has run.
 render-config = { cmd = "build/Release/starfieldht_config_tests.exe --render-config HeadTracking.ini && node cameraunlock-core/scripts/encode-seed.mjs", depends-on = ["build-release"] }
 

@@ -172,17 +172,17 @@ void Mod::AnnounceStartup() {
 
 void Mod::LoadConfig() {
     namespace cfg = cameraunlock::config;
-    const std::wstring configPath = GetModulePathW(L"HeadTracking.ini");
-    if (configPath.empty()) {
+    const std::wstring folder = GetModuleDirectoryW();
+    if (folder.empty()) {
         // Module directory lookup failed - refuse to fall back to a CWD-relative
         // config, since that would silently read/write the wrong file.
-        Logger::Instance().Error("Could not resolve module directory for HeadTracking.ini - using "
+        Logger::Instance().Error("Could not resolve module directory for CameraUnlock.ini - using "
                                  "built-in defaults, and nothing is saved this session");
         m_config = MakeConfigTable().defaults();
         return;
     }
 
-    m_configOwner.emplace(MakeConfigOwnerOptions(configPath));
+    m_configOwner.emplace(MakeConfigOwnerOptions(folder, cfg::DefaultsFile::PerUser()));
     const cfg::ConfigLoadResult<Config> loaded = m_configOwner->Load();
     for (const std::string& line : loaded.log) Logger::Instance().Info("%s", line.c_str());
     Logger::Instance().Info("Config: %s", cfg::ConfigLoadStatusName(loaded.status));
@@ -195,13 +195,16 @@ void Mod::LoadConfig() {
 
 void Mod::SaveToggle(const std::function<void(Config&)>& change) {
     if (!m_configOwner) {
-        Logger::Instance().Warning("Not saved: HeadTracking.ini has no known folder this session");
+        Logger::Instance().Warning("Not saved: CameraUnlock.ini has no known folder this session");
         return;
     }
     const cameraunlock::config::ConfigSaveResult saved = m_configOwner->Save(change);
-    if (saved.status == cameraunlock::config::ConfigSaveStatus::Saved) return;
+    // A save that succeeds can carry a line too, naming a row that stopped following
+    // Defaults.ini.
     for (const std::string& line : saved.log) Logger::Instance().Info("%s", line.c_str());
-    Logger::Instance().Warning("%s", saved.reason.c_str());
+    if (saved.status != cameraunlock::config::ConfigSaveStatus::Saved) {
+        Logger::Instance().Warning("%s", saved.reason.c_str());
+    }
 }
 
 // False means the mod must not run at all. Only two things reach that: MinHook
@@ -273,7 +276,7 @@ bool Mod::InitializeHooks() {
         m_inputHookInstalled = false;
         Logger::Instance().Warning(
             "Input hook failed - no hotkeys this session, so tracking runs on whatever "
-            "HeadTracking.ini starts it with");
+            "CameraUnlock.ini starts it with");
     } else {
         m_inputHookInstalled = true;
         Logger::Instance().Info("Input hook installed");

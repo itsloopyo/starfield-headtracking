@@ -2,6 +2,9 @@
 #Requires -Version 5.1
 # Thin wrapper - dev-deploy orchestration lives in
 # cameraunlock-core/powershell/DevDeploy.psm1.
+#
+# No config is copied: the mod creates CameraUnlock.ini at its first start,
+# importing HeadTracking.ini where an older build left one.
 
 param(
     [Parameter(Mandatory=$true, Position=0)]
@@ -21,14 +24,12 @@ $projectRoot = Split-Path -Parent $scriptDir
 Import-Module (Join-Path $projectRoot "cameraunlock-core\powershell\DevDeploy.psm1") -Force
 Import-Module (Join-Path $projectRoot "cameraunlock-core\powershell\ModDeployment.psm1") -Force
 $buildOutput = Join-Path $projectRoot "bin\$Configuration"
-$configFile = Join-Path $projectRoot 'HeadTracking.ini'
 $vendorLoader = Join-Path $projectRoot 'vendor\ultimate-asi-loader\dinput8.dll'
 $result = Invoke-DevDeployASILoader `
     -GameId 'starfield' `
     -GameDisplayName 'Starfield' `
     -BuildOutputPath $buildOutput `
     -ModDllName 'StarfieldHeadTracking.asi' `
-    -ConfigFile $configFile `
     -VendorLoaderDll $vendorLoader `
     -AsiLoaderName 'winmm.dll' `
     -ExtraDlls @() `
@@ -41,7 +42,6 @@ Write-DeploymentSuccess `
         "End       - Toggle head tracking on/off",
         "Page Up   - Cycle tracking mode (full / rotation-only / position-only)",
         "Page Down - Toggle yaw mode (world / local)",
-        "Insert    - Cycle what the sights do",
         "",
-        "No nav cluster? Chords: Ctrl+Shift+ Y=Toggle G=Mode H=Yaw U=Sights"
+        "No nav cluster? Chords: Ctrl+Shift+ Y=Toggle G=Mode H=Yaw"
     )

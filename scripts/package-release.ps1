@@ -10,9 +10,12 @@
 #   - StarfieldHeadTracking-v<version>-nexus.zip (Nexus Mods)
 #       StarfieldHeadTracking.asi at the archive root, alongside
 #       README/CHANGELOG/THIRD-PARTY-NOTICES/LICENSE. Users drop the .asi
-#       next to Starfield.exe. No HeadTracking.ini - the mod self-generates it
-#       on first launch, so bundling it would clobber user config on update.
-#       Nexus users manage their own ASI loader.
+#       next to Starfield.exe. Nexus users manage their own ASI loader.
+#
+# Neither ZIP carries a config. The mod creates CameraUnlock.ini at its first
+# start, importing HeadTracking.ini where an older version left one, so a
+# shipped copy of either file would overwrite the player's settings or stop
+# that import.
 #
 # Vendoring is refreshed manually by the dev via 'pixi run update-deps'
 # (scripts/update-deps.ps1) and committed under vendor/. CI never refreshes;
@@ -72,9 +75,6 @@ if (-not (Test-Path $asiPath)) {
     throw "$modName.asi not found at: $asiPath. Run 'pixi run build-release' first."
 }
 
-$iniPath = Join-Path $projectDir "HeadTracking.ini"
-if (-not (Test-Path $iniPath)) { throw "HeadTracking.ini not found at: $iniPath" }
-
 $scriptsDir = Join-Path $projectDir "scripts"
 foreach ($script in @("install.cmd", "uninstall.cmd")) {
     $p = Join-Path $scriptsDir $script
@@ -112,14 +112,6 @@ foreach ($script in @("install.cmd", "uninstall.cmd")) {
 $manifestSource = Join-Path $projectDir "launcher-manifest.json"
 if (-not (Test-Path $manifestSource)) { throw "launcher-manifest.json not found at: $manifestSource" }
 
-# loader.seed is a base64 copy of HeadTracking.ini, and it is the config a
-# launcher-deployed user actually gets. The committed manifest is the
-# authoritative copy of it: reviewable, diffable and in git, where the blob
-# inside the ZIP is a build product. Refreshing the blob from disk here would
-# ship a correct ZIP over a stale committed file, so drift fails the build and
-# gets re-stamped in a commit instead.
-Assert-ManifestSeedsMatchShipped -ManifestPath $manifestSource -ProjectRoot $projectDir
-
 $launcherManifest = Get-Content $manifestSource -Raw | ConvertFrom-Json
 $launcherManifest.mod_info.version = $version
 $launcherManifest | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $stagingInstaller "launcher-manifest.json") -NoNewline
@@ -129,8 +121,6 @@ $pluginsDir = Join-Path $stagingInstaller "plugins"
 New-Item -ItemType Directory -Path $pluginsDir -Force | Out-Null
 Copy-Item $asiPath -Destination $pluginsDir -Force
 Write-Host "  plugins/$modName.asi" -ForegroundColor Green
-Copy-Item $iniPath -Destination $pluginsDir -Force
-Write-Host "  plugins/HeadTracking.ini" -ForegroundColor Green
 
 $vendorDest = Join-Path $stagingInstaller "vendor/ultimate-asi-loader"
 New-Item -ItemType Directory -Path $vendorDest -Force | Out-Null
@@ -188,11 +178,6 @@ New-Item -ItemType Directory -Path $stagingNexus -Force | Out-Null
 Copy-Item $asiPath -Destination $stagingNexus -Force
 Write-Host "  $modName.asi" -ForegroundColor Green
 
-# HeadTracking.ini is deliberately NOT shipped: the mod creates it with
-# defaults on first launch if absent, and converts an older one in place, so
-# bundling it would put the stamped default over the user's tuned config every
-# time they update the mod through Nexus, and no conversion would run.
-#
 # Docs sit at the archive root (informational, not deployed to the game
 # folder). THIRD-PARTY-NOTICES travels with the binary for attribution of the
 # statically-linked libraries (MinHook, inih).

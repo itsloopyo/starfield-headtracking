@@ -3,8 +3,10 @@
 //   oracle     the published build's reader (oracle/), the dev pre-release at d276538, and
 //              its startup code
 //   import     the frozen reader in src/legacy_config/, and the startup code it ran under
-//   migration  the config owner converting the file, then the canonical reader and table on
-//              the result, and the startup code of this build
+//   migration  the config owner on a folder holding the input as HeadTracking.ini: the import
+//              into a new CameraUnlock.ini, then the canonical reader and table on that file,
+//              and the startup code of this build. Every owner reads a scratch Defaults.ini,
+//              never the developer's own
 //
 // Comparison 1, oracle against import, finds what a player updating from the published build
 // sees change that the conversion did not cause. Every difference it may find is listed in
@@ -17,6 +19,13 @@
 // always follow the aim (reticle). No default moved, so the no-file input has no difference
 // either. The frozen reader clamps every number and hotkey code it reads into a range the
 // canonical rows hold, so no input is deferred and no N1 or N2 applies.
+//
+// Each input migrates three times: over a Defaults.ini at the built-in values, from a read-only
+// HeadTracking.ini, and over a Defaults.ini that differs from the built-in values on every global
+// row. All three give the same settings, since the migration writes default only where the
+// imported value is what default gives. Every load leaves HeadTracking.ini's bytes, last write
+// time and attributes as they were, the folder holds HeadTracking.ini and CameraUnlock.ini and
+// nothing else, and the next start reads CameraUnlock.ini, imports nothing and writes nothing.
 //
 // The distinct migrated files are written beside the executable under migrated\, for
 // lint-migrated.mjs to run core's canonical config lint over.
@@ -132,6 +141,44 @@ std::wstring MakeFolder(const std::wstring& parent, const wchar_t* name) {
     }
     EmptyFolder(dir);
     return dir;
+}
+
+// The names of the files in the folder.
+std::set<std::wstring> Names(const std::wstring& dir) {
+    std::set<std::wstring> names;
+    for (const auto& [name, bytes] : Snapshot(dir)) names.insert(name);
+    return names;
+}
+
+// A file's bytes, last write time and attributes, which no load may change.
+struct FileState {
+    std::string bytes;
+    uint64_t written = 0;
+    DWORD attributes = 0;
+
+    bool operator==(const FileState& o) const {
+        return bytes == o.bytes && written == o.written && attributes == o.attributes;
+    }
+    bool operator!=(const FileState& o) const { return !(*this == o); }
+};
+
+std::optional<FileState> StateOf(const std::wstring& path) {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        if (GetLastError() == ERROR_FILE_NOT_FOUND) return std::nullopt;
+        throw std::runtime_error("cannot read the attributes of " + Narrow(path));
+    }
+    FileState state;
+    state.bytes = ReadBytes(path);
+    state.written = (static_cast<uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32) |
+                    data.ftLastWriteTime.dwLowDateTime;
+    state.attributes = data.dwFileAttributes;
+    return state;
+}
+
+bool LogSays(const std::vector<std::string>& log, const std::string& text) {
+    return std::any_of(log.begin(), log.end(),
+                       [&text](const std::string& line) { return line.find(text) != std::string::npos; });
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +613,8 @@ struct MigrationTally {
     int with_n1 = 0;
 };
 
-std::string Render(const Config& c) {
+// Every row's value, whatever Defaults.ini holds, so two Configs compare in full.
+std::string Values(const Config& c) {
     return cfg::RenderCanonical(StarfieldHT::MakeConfigTable(), c, {StarfieldHT::kConfigDisplayName});
 }
 
@@ -578,30 +626,97 @@ struct Folders {
     std::wstring oracle;
     std::wstring import;
     std::wstring migration;
+    std::wstring read_only;
+    std::wstring skewed;
+    // Defaults.ini at the built-in values, which the first owner creates, and one that differs
+    // from them on every global row the table binds.
+    std::wstring defaults;
+    std::wstring skewed_defaults;
 };
 
 const wchar_t kIniName[] = L"HeadTracking.ini";
+const wchar_t kCanonicalName[] = L"CameraUnlock.ini";
+
+const char kSkewedDefaults[] =
+    "[CameraUnlock]\r\nConfigFormat=1\r\n\r\n"
+    "[Network]\r\nUdpPort=5252\r\n\r\n"
+    "[General]\r\nEnableOnStartup=false\r\nWorldSpaceYaw=false\r\nRotationEnabled=true\r\n\r\n"
+    "[Smoothing]\r\nLocalSmoothing=0.5\r\nRemoteSmoothing=0.5\r\n\r\n"
+    "[Position]\r\nPositionEnabled=false\r\nPositionLimitX=0.25\r\nPositionLimitY=0.25\r\n"
+    "PositionLimitYDown=0.25\r\nPositionLimitZ=0.25\r\nPositionLimitZBack=0.25\r\n\r\n"
+    "[Hotkeys]\r\nToggleKey=F8\r\nCycleTrackingModeKey=F9\r\nYawModeKey=F10\r\n\r\n"
+    "[Light]\r\nLightFollowsHead=false\r\nLightMultiplier=1.0\r\n";
+
+cfg::ConfigOwnerOptions<Config> Options(const std::wstring& folder, const std::wstring& defaults) {
+    return StarfieldHT::MakeConfigOwnerOptions(folder + L"\\", cfg::DefaultsFile::At(defaults));
+}
+
+// The owner on `folder`, which holds the input as HeadTracking.ini (or nothing), over the
+// Defaults.ini at `defaults`: what the design asks of the load beyond comparison 2, and the
+// settings the session runs on. A file it migrates goes into the tally.
+std::optional<Config> Migrate(const std::wstring& folder, const std::wstring& defaults, const std::string& label,
+                              MigrationTally& tally) {
+    using cfg::ConfigLoadStatus;
+    const std::wstring legacyPath = folder + L"\\" + kIniName;
+    const std::wstring path = folder + L"\\" + kCanonicalName;
+    const std::optional<FileState> legacyBefore = StateOf(legacyPath);
+
+    const cfg::ConfigLoadResult<Config> loaded = cfg::ConfigOwner<Config>(Options(folder, defaults)).Load();
+    if (StateOf(legacyPath) != legacyBefore) Fail(label, "the load changed HeadTracking.ini's bytes, write time or attributes");
+
+    if (!legacyBefore) {
+        if (loaded.status != ConfigLoadStatus::Created) Fail(label, "no file is not Created");
+        if (Names(folder) != std::set<std::wstring>{kCanonicalName}) Fail(label, "a first launch left more than CameraUnlock.ini");
+    } else if (loaded.status != ConfigLoadStatus::Migrated) {
+        Fail(label, std::string("the migration is ") + cfg::ConfigLoadStatusName(loaded.status) + ": " + loaded.reason);
+        return std::nullopt;
+    } else {
+        if (Names(folder) != std::set<std::wstring>{kIniName, kCanonicalName}) {
+            Fail(label, "the folder holds more than HeadTracking.ini and CameraUnlock.ini");
+        }
+        const std::string migrated = ReadBytes(path);
+        const cfg::CanonicalIni doc = cfg::ParseCanonicalIni(migrated);
+        Config reread = StarfieldHT::MakeConfigTable().defaults();
+        if (!cfg::HasCanonicalStamp(migrated) || !doc.IsReadable() || !doc.diagnostics.empty() ||
+            !cfg::ApplyCanonical(doc, StarfieldHT::MakeConfigTable(), reread).diagnostics.empty()) {
+            Fail(label, "the migrated file is not a stamped canonical file that reads without a diagnostic");
+        }
+        tally.migrated.insert(migrated);
+    }
+
+    // The next start reads CameraUnlock.ini, imports nothing and writes nothing.
+    const std::optional<FileState> created = StateOf(path);
+    const cfg::ConfigLoadResult<Config> again = cfg::ConfigOwner<Config>(Options(folder, defaults)).Load();
+    if (again.status != ConfigLoadStatus::Canonical || !again.diagnostics.empty()) {
+        Fail(label, std::string("the next start is ") + cfg::ConfigLoadStatusName(again.status));
+    }
+    if (Values(again.config) != Values(loaded.config)) Fail(label, "the next start gives other settings");
+    if (StateOf(path) != created || StateOf(legacyPath) != legacyBefore) Fail(label, "the next start changed a file");
+    if (legacyBefore && !LogSays(again.log, "is left as it was and is not read")) {
+        Fail(label, "the next start does not log that HeadTracking.ini is not read");
+    }
+    return loaded.config;
+}
 
 void MigrateInput(const Folders& f, const std::string& name, const std::optional<std::string>& bytes,
                   const ImportRun& i, const cfg::ImportResult* result, MigrationTally& tally) {
-    using cfg::ConfigLoadStatus;
     EmptyFolder(f.migration);
-    const std::wstring path = f.migration + L"\\" + kIniName;
-    if (bytes) WriteBytes(path, *bytes);
-    cfg::ConfigOwner<Config> owner(StarfieldHT::MakeConfigOwnerOptions(path));
-    const cfg::ConfigLoadResult<Config> loaded = owner.Load();
-    const std::map<std::wstring, std::string> after = Snapshot(f.migration);
+    if (bytes) WriteBytes(f.migration + L"\\" + kIniName, *bytes);
+    const std::optional<Config> migrated = Migrate(f.migration, f.defaults, name, tally);
+    if (!migrated) return;
 
     if (!bytes) {
         ++tally.created;
-        if (loaded.status != ConfigLoadStatus::Created) Fail(name, "no file is not Created");
-        if (ReadBytes(path) != tally.committed) Fail(name, "the created file is not HeadTracking.ini as committed");
-        for (const std::string& d : StartupDifferences(FromImport(name, i.cfg, {}), FromMigration(loaded.config))) {
+        if (ReadBytes(f.migration + L"\\" + kCanonicalName) != tally.committed) {
+            Fail(name, "the created CameraUnlock.ini is not HeadTracking.ini as committed");
+        }
+        for (const std::string& d : StartupDifferences(FromImport(name, i.cfg, {}), FromMigration(*migrated))) {
             Fail(name, "comparison 2: " + d);
         }
         return;
     }
 
+    ++tally.converted;
     if (CheckPoseShaping(name, i.cfg, *result) > 0) ++tally.with_pose_shaping_dropped;
     if (CheckReticle(name, i.cfg, *result) > 0) ++tally.with_reticle_dropped;
     CheckDropRules(name, *result);
@@ -609,30 +724,24 @@ void MigrateInput(const Folders& f, const std::string& name, const std::optional
                     [](const cfg::DroppedValue& d) { return d.rule == cfg::DropRule::KeyCodeOutOfRange; })) {
         ++tally.with_n1;
     }
-
-    for (const std::string& d :
-         StartupDifferences(FromImport(name, i.cfg, result->dropped), FromMigration(loaded.config))) {
+    for (const std::string& d : StartupDifferences(FromImport(name, i.cfg, result->dropped), FromMigration(*migrated))) {
         Fail(name, "comparison 2: " + d);
     }
 
-    ++tally.converted;
-    if (loaded.status != ConfigLoadStatus::Migrated) {
-        Fail(name, std::string("the migration is ") + cfg::ConfigLoadStatusName(loaded.status) + ": " + loaded.reason);
-        return;
+    EmptyFolder(f.read_only);
+    const std::wstring readOnly = f.read_only + L"\\" + kIniName;
+    WriteBytes(readOnly, *bytes);
+    SetFileAttributesW(readOnly.c_str(), FILE_ATTRIBUTE_READONLY);
+    const std::optional<Config> fromReadOnly = Migrate(f.read_only, f.defaults, name + " (read-only)", tally);
+    if (fromReadOnly && Values(*fromReadOnly) != Values(*migrated)) {
+        Fail(name, "a read-only HeadTracking.ini migrates to other settings than a writable one");
     }
-    const auto copy = after.find(std::wstring(kIniName) + L".pre-canonical");
-    if (copy == after.end() || copy->second != *bytes) Fail(name, ".pre-canonical is not the input");
-    if (after.size() != 2) Fail(name, "the migration left files other than the config and its copy");
 
-    const std::string migrated = ReadBytes(path);
-    if (Render(loaded.config) != migrated) Fail(name, "rendering the re-read Config does not give the migrated bytes");
-    tally.migrated.insert(migrated);
-
-    cfg::ConfigOwner<Config> again(StarfieldHT::MakeConfigOwnerOptions(path));
-    const cfg::ConfigLoadResult<Config> reread = again.Load();
-    if (reread.status != ConfigLoadStatus::Canonical || !reread.diagnostics.empty() ||
-        Render(reread.config) != migrated || Snapshot(f.migration) != after || ReadBytes(path) != migrated) {
-        Fail(name, "migrating the migrated file does something");
+    EmptyFolder(f.skewed);
+    WriteBytes(f.skewed + L"\\" + kIniName, *bytes);
+    const std::optional<Config> overSkewed = Migrate(f.skewed, f.skewed_defaults, name + " (skewed Defaults.ini)", tally);
+    if (overSkewed && Values(*overSkewed) != Values(*migrated)) {
+        Fail(name, "the migration gives other settings over a Defaults.ini that differs on every global row");
     }
 }
 
@@ -700,8 +809,8 @@ std::vector<std::pair<std::string, std::string>> EveryHotkeyCode(const std::stri
 }
 
 // A file that exists and cannot be opened: the published build ran on its defaults and left it
-// alone, the import reports it as such, and the owner defers it on the defaults, saving
-// nothing that session.
+// alone, the import reports it as such, and the owner defers it on the defaults, creates no
+// CameraUnlock.ini and saves nothing that session.
 void TestUnopenableFile(const Folders& f, const std::string& shipped) {
     const std::string name = "a file another program holds open with no sharing";
     OracleRun o;
@@ -718,7 +827,7 @@ void TestUnopenableFile(const Folders& f, const std::string& shipped) {
         } else if (dir == f.import) {
             i.status = legacy::Read(Narrow(path).c_str(), i.cfg);
         } else {
-            cfg::ConfigOwner<Config> owner(StarfieldHT::MakeConfigOwnerOptions(path));
+            cfg::ConfigOwner<Config> owner(Options(dir, f.defaults));
             loaded.emplace(owner.Load());
             if (owner.Save([](Config& c) { c.world_space_yaw = false; }).status != cfg::ConfigSaveStatus::NotSaved) {
                 Fail(name, "a deferred session saved");
@@ -737,7 +846,10 @@ void TestUnopenableFile(const Folders& f, const std::string& shipped) {
         Fail(name, "comparison 2: " + d);
     }
     if (Snapshot(f.migration) != std::map<std::wstring, std::string>{{kIniName, shipped}}) {
-        Fail(name, "a deferred file did not keep its bytes, or got a copy");
+        Fail(name, "a deferred import left more than HeadTracking.ini as it was");
+    }
+    if (!LogSays(loaded->log, "in use by another program") && loaded->reason.find("in use by another program") == std::string::npos) {
+        Fail(name, "the deferred import does not say the file is in use");
     }
 }
 
@@ -776,8 +888,13 @@ int main() {
         const std::wstring root = std::wstring(temp) + L"starfield-config-differential-" +
                                   std::to_wstring(GetCurrentProcessId());
         CreateDirectoryW(root.c_str(), nullptr);
-        const Folders folders{MakeFolder(root, L"oracle"), MakeFolder(root, L"import"),
-                              MakeFolder(root, L"migration")};
+        const std::wstring global = MakeFolder(root, L"global");
+        const std::wstring skewedGlobal = MakeFolder(root, L"skewed-global");
+        const Folders folders{MakeFolder(root, L"oracle"),    MakeFolder(root, L"import"),
+                              MakeFolder(root, L"migration"), MakeFolder(root, L"read-only"),
+                              MakeFolder(root, L"skewed"),    global + L"\\Defaults.ini",
+                              skewedGlobal + L"\\Defaults.ini"};
+        WriteBytes(folders.skewed_defaults, kSkewedDefaults);
         MigrationTally tally;
         tally.committed = ReadBytes(Widen(SF_COMMITTED_CONFIG));
 
@@ -806,15 +923,15 @@ int main() {
         TestUnopenableFile(folders, shipped);
 
         // Fresh equals upgrade: the file the published build shipped and the one it wrote at
-        // first launch both convert to the committed file, as no file is created as it.
+        // first launch both import into a CameraUnlock.ini that is the committed file, as no file
+        // is created as it, over a Defaults.ini at the built-in values.
         for (const std::string& file : {shipped, firstRun}) {
             EmptyFolder(folders.migration);
-            const std::wstring path = folders.migration + L"\\" + kIniName;
-            WriteBytes(path, file);
-            cfg::ConfigOwner<Config> owner(StarfieldHT::MakeConfigOwnerOptions(path));
-            owner.Load();
-            if (ReadBytes(path) != tally.committed) {
-                Fail("fresh equals upgrade", "a published build's default file does not convert to the committed file");
+            WriteBytes(folders.migration + L"\\" + kIniName, file);
+            cfg::ConfigOwner<Config> owner(Options(folders.migration, folders.defaults));
+            if (owner.Load().status != cfg::ConfigLoadStatus::Migrated ||
+                ReadBytes(folders.migration + L"\\" + kCanonicalName) != tally.committed) {
+                Fail("fresh equals upgrade", "a published build's default file does not import into the committed file");
             }
         }
 
@@ -852,7 +969,8 @@ int main() {
             WriteBytes(lintDir + L"\\" + std::to_wstring(n++) + L".ini", file);
         }
 
-        for (const std::wstring& dir : {folders.oracle, folders.import, folders.migration}) {
+        for (const std::wstring& dir : {folders.oracle, folders.import, folders.migration, folders.read_only,
+                                        folders.skewed, global, skewedGlobal}) {
             EmptyFolder(dir);
             RemoveDirectoryW(dir.c_str());
         }

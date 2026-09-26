@@ -54,7 +54,7 @@ std::vector<cameraunlock::input::KeyBinding> Parse(const std::string& list) {
 }
 
 void RegisterBindings(const Config& config) {
-    // Each list from HeadTracking.ini, chords included. A plain key does not
+    // Each list from CameraUnlock.ini, chords included. A plain key does not
     // fire while Ctrl and Shift are both held, so Ctrl+Shift with a key reaches
     // only a binding that names the chord.
     using cameraunlock::input::RegisterKeyBindings;

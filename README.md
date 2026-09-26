@@ -4,6 +4,11 @@
 
 An unofficial head tracking mod for Starfield that moves the view with your head while your mouse or controller keeps aiming, driven by a webcam, phone, or any OpenTrack compatible tracker, with no VR headset required.
 
+**Updating from an earlier version?** Settings now live in `CameraUnlock.ini`
+next to `Starfield.exe`. The first start of this version reads your settings
+from `HeadTracking.ini` into it and leaves `HeadTracking.ini` as it was. See
+[Configuration](#configuration).
+
 ## Features
 
 - **Decoupled look and aim** - look around with your head while your mouse or controller controls aim. Ship lock-on acquisition follows your view.
@@ -29,7 +34,8 @@ An unofficial head tracking mod for Starfield that moves the view with your head
 2. Extract it anywhere.
 3. Double-click `install.cmd`. The installer finds the game and puts Ultimate
    ASI Loader (as `winmm.dll`) and the mod (`StarfieldHeadTracking.asi`) next to
-   `Starfield.exe`, along with `HeadTracking.ini`.
+   `Starfield.exe`. The mod creates `CameraUnlock.ini` there the first time the
+   game starts.
 4. Configure your tracker to send UDP to `127.0.0.1` on port `4242`. See
    [Setting Up OpenTrack](#setting-up-opentrack) below.
 5. Launch Starfield.
@@ -57,7 +63,7 @@ Use these files from the installer ZIP:
    `C:\Program Files (x86)\Steam\steamapps\common\Starfield` for Steam and
    `C:\XboxGames\Starfield\Content` for the Xbox app.
 2. Copy `plugins/StarfieldHeadTracking.asi` to the same folder. The mod writes its
-   own `HeadTracking.ini` beside it on first launch.
+   own `CameraUnlock.ini` beside it on first launch.
 3. Configure your tracker using the steps below, then launch Starfield.
 
 ## Setting Up OpenTrack
@@ -108,7 +114,7 @@ Look straight ahead and use your tracker's center control.
 
 Two equivalent binding sets by default - use whichever your keyboard has. The
 nav-cluster keys and the chords do exactly the same thing. Each is an entry in
-the `[Hotkeys]` lists in `HeadTracking.ini`, so either can be rebound or
+the `[Hotkeys]` lists in `CameraUnlock.ini`, so either can be rebound or
 removed there.
 
 | Action              | Nav-cluster | Chord          |
@@ -124,7 +130,7 @@ removed there.
 3. Rotational tracking disabled, positional tracking enabled
 4. Back to normal
 
-The tracking mode and horizon lock are saved to `HeadTracking.ini` when you
+The tracking mode and horizon lock are saved to `CameraUnlock.ini` when you
 change them, and the game starts in them next time. `End` changes the current
 session only: head tracking starts on or off as `EnableOnStartup` says.
 
@@ -156,14 +162,22 @@ you are looking at. Leaning carries the light with your eye.
 | `LightFollowsHead` | `true` | Point the light where you are looking. `false` leaves it on your aim |
 | `LightMultiplier` | `1.5` | How far it turns relative to your head. `1.0` matches the view, `0` keeps it pointing along your aim |
 
-Both are under `[Light]` in `HeadTracking.ini`.
+Both are under `[Light]` in `CameraUnlock.ini`.
 
 ## Configuration
 
 <!-- cameraunlock:config -->
-The mod reads its settings from `HeadTracking.ini` in the game folder, and creates the file when it starts and finds none. Edit it with any text editor.
+The mod reads its settings from `CameraUnlock.ini` in the game folder, and creates the file when it starts and finds none. Edit it with any text editor.
 
-Earlier versions of the mod used an older layout for this file. The first time this version starts, it converts the file once into the layout below and keeps the file as it was beside it as `HeadTracking.ini.pre-canonical`. `HeadTracking.ini.pre-canonical.last`, when present, is the file as it was before the most recent conversion: the mod converts the file again when it finds the older layout later, for example after an older version of the mod rewrote it.
+A setting set to `default` takes its value from `Defaults.ini`, which every head tracking mod that keeps its settings in `CameraUnlock.ini` reads. Head tracking mods that keep their settings in another file do not read it, and neither do earlier versions of this mod. Writing a value in place of `default` changes that setting for this game only. When the mod saves a setting that a hotkey changed in game, it writes the new value in place of `default`, so that setting no longer follows `Defaults.ini` in this game until you set it to `default` again.
+
+`Defaults.ini` is `%AppData%\CameraUnlock\Defaults.ini` on Windows; `$XDG_CONFIG_HOME/CameraUnlock/Defaults.ini` on Linux, or `~/.config/CameraUnlock/Defaults.ini` where `XDG_CONFIG_HOME` is not set, under Wine and Proton too; and `~/Library/Application Support/CameraUnlock/Defaults.ini` on macOS. The mod's log, where it writes one, names the file it read.
+
+When the mod starts and finds no `Defaults.ini`, it creates one holding the built-in values, unless Windows runs the game as a packaged app. The mod never changes `Defaults.ini` after that. Edit it with any text editor.
+
+Earlier versions of the mod kept these settings in `HeadTracking.ini`, in the same folder. The first time this version starts and finds no `CameraUnlock.ini`, it reads your settings from `HeadTracking.ini` and writes them into `CameraUnlock.ini`. It never changes `HeadTracking.ini`, and does not read it again while `CameraUnlock.ini` exists.
+
+A setting that the defaults below set to `default` is written as `default` when the value imported for it equals its default at that start, which is the value `Defaults.ini` gives it, or the built-in value where `Defaults.ini` gives none. It then follows `Defaults.ini`. Every other setting is written with the value imported for it. `RotationEnabled` and `PositionEnabled` are one setting here, the tracking mode, so both are written as `default` or neither is.
 
 Comments, and keys the mod never read, are not carried over. Nor are these, where your old file had them:
 
@@ -171,7 +185,29 @@ Comments, and keys the mod never read, are not carried over. Nor are these, wher
 - A sensitivity, scale, deadzone, response curve or axis inversion you changed from its default. Set these in your tracker instead.
 - The setting for a feature that earlier versions shipped switched off while it was untested. It now follows the mod's default.
 
-An older version of the mod may not read the new layout correctly. It reads a key that moved as its own default, and it can misread a hotkey or another value that is now written as a name. To go back to an older version, first copy `HeadTracking.ini.pre-canonical` back over `HeadTracking.ini`, which restores the old file.
+An older version of the mod reads `HeadTracking.ini` and never reads `CameraUnlock.ini`, so a setting you change after updating is not in `HeadTracking.ini`.
+
+Deleting only `CameraUnlock.ini` makes the next start read `HeadTracking.ini` again. To go back to the defaults, replace everything in `CameraUnlock.ini` with the defaults below. Every setting they set to `default` then follows `Defaults.ini`.
+
+The built-in value of each setting set to `default` below:
+
+- `UdpPort=4242`
+- `EnableOnStartup=true`
+- `WorldSpaceYaw=true`
+- `RotationEnabled=true`
+- `LocalSmoothing=0.0`
+- `RemoteSmoothing=0.15`
+- `PositionEnabled=true`
+- `PositionLimitX=0.3`
+- `PositionLimitY=0.2`
+- `PositionLimitYDown=0.2`
+- `PositionLimitZ=0.4`
+- `PositionLimitZBack=0.1`
+- `ToggleKey=End, Ctrl+Shift+Y`
+- `CycleTrackingModeKey=PageUp, Ctrl+Shift+G`
+- `YawModeKey=PageDown, Ctrl+Shift+H`
+- `LightFollowsHead=true`
+- `LightMultiplier=1.5`
 
 With every setting at its default, the file reads:
 
@@ -179,6 +215,12 @@ With every setting at its default, the file reads:
 ; Starfield head tracking settings.
 ; Comments start with ; and go on their own line. Text after a value is part of the value.
 ; Hotkeys are key names such as End, PageUp or Ctrl+Shift+Y. Separate several with commas; leave empty for none.
+; A setting set to default takes its value from Defaults.ini, which every head tracking mod
+; that keeps its settings in CameraUnlock.ini reads: %AppData%\CameraUnlock\Defaults.ini on
+; Windows, $XDG_CONFIG_HOME/CameraUnlock/Defaults.ini (normally ~/.config/CameraUnlock) on
+; Linux, under Wine and Proton too, and ~/Library/Application Support/CameraUnlock/Defaults.ini
+; on macOS. The log names the file it read. Write a value instead of default to change that
+; setting for this game only.
 
 [CameraUnlock]
 ; Written by the mod. Leave this section in place.
@@ -186,54 +228,54 @@ ConfigFormat=1
 
 [Network]
 ; UDP port the mod receives tracker data on (OpenTrack protocol).
-UdpPort=4242
+UdpPort=default
 
 [General]
 ; true: head tracking is on when the game starts. ToggleKey turns it on and off.
-EnableOnStartup=true
+EnableOnStartup=default
 ; true: yaw turns around the world's up axis and a lean moves along the ground.
 ; false: both follow the camera's own axes.
-WorldSpaceYaw=true
+WorldSpaceYaw=default
 ; true: turning your head turns the view.
 ; Tracking mode at startup, with PositionEnabled. The mode hotkey changes both.
-RotationEnabled=true
+RotationEnabled=default
 
 [Smoothing]
 ; Smoothing when the tracker runs on this PC. 0 is the least, 1 the most.
-LocalSmoothing=0.0
+LocalSmoothing=default
 ; Smoothing when the tracker is another device on the network, such as a phone.
 ; 0 is the least, 1 the most.
-RemoteSmoothing=0.15
+RemoteSmoothing=default
 
 [Position]
 ; true: moving your head moves the view.
 ; Tracking mode at startup, with RotationEnabled. The mode hotkey changes both.
-PositionEnabled=true
+PositionEnabled=default
 ; How far, in metres, leaning left or right can move the view.
-PositionLimitX=0.3
+PositionLimitX=default
 ; How far, in metres, raising your head can move the view.
-PositionLimitY=0.2
+PositionLimitY=default
 ; How far, in metres, lowering your head can move the view.
-PositionLimitYDown=0.2
+PositionLimitYDown=default
 ; How far, in metres, leaning forward can move the view.
-PositionLimitZ=0.4
+PositionLimitZ=default
 ; How far, in metres, leaning back can move the view.
-PositionLimitZBack=0.1
+PositionLimitZBack=default
 
 [Hotkeys]
 ; Turns head tracking on and off.
-ToggleKey=End, Ctrl+Shift+Y
+ToggleKey=default
 ; Changes the tracking mode: rotation and position, rotation only, position only.
-CycleTrackingModeKey=PageUp, Ctrl+Shift+G
+CycleTrackingModeKey=default
 ; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
-YawModeKey=PageDown, Ctrl+Shift+H
+YawModeKey=default
 
 [Light]
 ; true: a light you carry points where you look instead of where you aim.
-LightFollowsHead=true
+LightFollowsHead=default
 ; How far the light turns for each degree your head turns.
 ; 1 matches the view, 0 keeps the light on your aim.
-LightMultiplier=1.5
+LightMultiplier=default
 ```
 <!-- /cameraunlock:config -->
 
@@ -291,10 +333,10 @@ Download the new release and run `install.cmd` again. Your config is preserved.
 
 ## Uninstalling
 
-Run `uninstall.cmd`. This removes the mod files and leaves `HeadTracking.ini`
-in place, so your settings survive a reinstall. The ASI loader is only removed
-if the installer put it there; if you already had your own, it is left alone.
-Use `uninstall.cmd /force` to remove it anyway.
+Run `uninstall.cmd`. This removes the mod files and leaves `CameraUnlock.ini`
+and `HeadTracking.ini` in place, so your settings survive a reinstall. The ASI
+loader is only removed if the installer put it there; if you already had your
+own, it is left alone. Use `uninstall.cmd /force` to remove it anyway.
 
 ## Building from Source
 

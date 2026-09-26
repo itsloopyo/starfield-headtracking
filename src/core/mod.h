@@ -61,14 +61,14 @@ private:
 
     static void AnnounceMode(const char* label, const char* value);
 
-    // Writes a toggle's new state to HeadTracking.ini, after the toggle has applied it.
+    // Writes a toggle's new state to CameraUnlock.ini, after the toggle has applied it.
     void SaveToggle(const std::function<void(Config&)>& change);
 
     std::atomic<bool> m_enabled{false};
     std::atomic<bool> m_initialized{false};
 
     Config m_config;
-    // The one reader and writer of HeadTracking.ini. Empty only when the mod's own folder
+    // The one reader and writer of CameraUnlock.ini. Empty only when the mod's own folder
     // could not be resolved, and then nothing is saved this session. The hotkey thread saves
     // through it after LoadConfig has built it on the init thread.
     std::optional<cameraunlock::config::ConfigOwner<Config>> m_configOwner;

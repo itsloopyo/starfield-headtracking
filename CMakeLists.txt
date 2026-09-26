@@ -137,7 +137,8 @@ if(STARFIELDHT_BUILD_TESTS)
     )
     add_test(NAME head_attached COMMAND starfieldht_head_attached_tests)
 
-    # The committed HeadTracking.ini against the table, and the toggles' saves.
+    # The committed HeadTracking.ini against the table's fresh render, the toggles' saves into
+    # CameraUnlock.ini, and the rows that follow Defaults.ini.
     # `--render-config <path>` makes it write the committed file instead
     # (pixi run render-config).
     add_executable(starfieldht_config_tests

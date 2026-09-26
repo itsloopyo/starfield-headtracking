@@ -50,7 +50,7 @@ std::string GetModulePath(const char* filename) {
     return dir + filename;
 }
 
-std::wstring GetModulePathW(const wchar_t* filename) {
+std::wstring GetModuleDirectoryW() {
     HMODULE hModule = nullptr;
     if (!GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -69,7 +69,7 @@ std::wstring GetModulePathW(const wchar_t* filename) {
             const std::wstring path(buf.data(), ret);
             const size_t lastSlash = path.find_last_of(L"\\/");
             if (lastSlash == std::wstring::npos) return L"";
-            return path.substr(0, lastSlash + 1) + filename;
+            return path.substr(0, lastSlash + 1);
         }
         bufSize *= 2;
     }

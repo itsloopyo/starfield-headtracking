@@ -110,12 +110,14 @@ cfg::LegacyImport<Config> MakeLegacyImport() {
     return {&Import, legacy::ReadKeys()};
 }
 
-cfg::ConfigOwnerOptions<Config> MakeConfigOwnerOptions(const std::wstring& path) {
+cfg::ConfigOwnerOptions<Config> MakeConfigOwnerOptions(const std::wstring& folder, cfg::DefaultsFile defaults) {
     cfg::ConfigOwnerOptions<Config> options;
-    options.path = path;
+    options.path = folder + kConfigFileName;
     options.table = MakeConfigTable();
     options.import = MakeLegacyImport();
+    options.legacy_path = folder + kLegacyFileName;
     options.header.display_name = kConfigDisplayName;
+    options.defaults = std::move(defaults);
     return options;
 }
 
