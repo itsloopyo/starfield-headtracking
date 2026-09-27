@@ -48,10 +48,13 @@ All notable changes to this project are documented here. The format follows
   `HeadTracking.ini`, and does not read it again while `CameraUnlock.ini`
   exists.
 - A setting that the defaults the README shows set to `default` is written as
-  `default` when the value imported for it equals its default at that start,
-  which is the value `Defaults.ini` gives it, or the built-in value where
-  `Defaults.ini` gives none. It then follows `Defaults.ini`. Every other
-  setting is written with the value imported for it.
+  `default` when you never changed it from the default earlier versions used,
+  because `HeadTracking.ini` does not hold it or holds that default. It then
+  follows `Defaults.ini`, so it takes the value `Defaults.ini` gives it, or the
+  built-in value where `Defaults.ini` gives none, which can differ from the
+  default earlier versions used. A setting you changed is written with the
+  value imported for it, or as `default` where that value equals its default
+  at that start.
 - `RotationEnabled` and `PositionEnabled` are one setting here, the tracking
   mode, so both are written as `default` or neither is.
 - Comments, and keys the mod never read, are not carried over. Nor are these,
@@ -59,6 +62,9 @@ All notable changes to this project are documented here. The format follows
   - A sensitivity, scale, deadzone, response curve or axis inversion you
     changed from its default. Set these in your tracker instead.
   - Reticle settings, and a key that toggled the reticle.
+  - A hotkey set to Ctrl, Shift or Alt on its own. That key goes down before
+    the key of any chord made with it, so the hotkey is left unbound, and it
+    keeps its Ctrl+Shift chord.
 - An older version of the mod reads `HeadTracking.ini` and never reads
   `CameraUnlock.ini`, so a setting you change after updating is not in
   `HeadTracking.ini`.

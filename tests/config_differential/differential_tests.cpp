@@ -18,14 +18,22 @@
 // or a [Ship] AimUIFollowsHead=true, since the game's crosshair and the ship's aim circle now
 // always follow the aim (reticle). No default moved, so the no-file input has no difference
 // either. The frozen reader clamps every number and hotkey code it reads into a range the
-// canonical rows hold, so no input is deferred and no N1 or N2 applies.
+// canonical rows hold, so no input is deferred and no N1 or N2 applies. A hotkey on Ctrl, Shift
+// or Alt alone (0x10-0x12, 0xA0-0xA5) is unbound and dropped (N3); its chord stays.
+//
+// A row the player never changed from what the published build shipped follows Defaults.ini:
+// the import lists it in follows_defaults_ini and the migration writes it default, the tracking
+// mode pair as one unit. The test derives the untouched rows from how the import's startup
+// differs from the startup with no file, and holds the import's list to them on every input.
 //
 // Each input migrates three times: over a Defaults.ini at the built-in values, from a read-only
 // HeadTracking.ini, and over a Defaults.ini that differs from the built-in values on every global
-// row. All three give the same settings, since the migration writes default only where the
-// imported value is what default gives. Every load leaves HeadTracking.ini's bytes, last write
-// time and attributes as they were, the folder holds HeadTracking.ini and CameraUnlock.ini and
-// nothing else, and the next start reads CameraUnlock.ini, imports nothing and writes nothing.
+// row. The first two give the settings the import read, since the published build's defaults
+// are the built-in values. Over the third a row the player never changed is written default and
+// takes Defaults.ini's value, and a changed row keeps the player's. Every load leaves
+// HeadTracking.ini's bytes, last write time and attributes as they were, the folder holds
+// HeadTracking.ini and CameraUnlock.ini and nothing else, and the next start reads
+// CameraUnlock.ini, imports nothing and writes nothing.
 //
 // The distinct migrated files are written beside the executable under migrated\, for
 // lint-migrated.mjs to run core's canonical config lint over.
@@ -446,13 +454,18 @@ const cfg::DroppedValue* FindDrop(const std::vector<cfg::DroppedValue>& dropped,
     return nullptr;
 }
 
-// A hotkey code outside 0x01-0xFE imports as unbound (N1), and only then is it dropped.
+// A hotkey code outside 0x01-0xFE imports as unbound (N1), and so does one on Ctrl, Shift or Alt
+// alone (N3); only then is it dropped.
 bool KeyAfterN1(const std::string& name, int vk, const char* key, const std::vector<cfg::DroppedValue>& dropped) {
     const bool outOfRange = vk != 0 && (vk < 0x01 || vk > 0xFE);
+    const bool modifier = (vk >= 0x10 && vk <= 0x12) || (vk >= 0xA0 && vk <= 0xA5);
     if (outOfRange != (FindDrop(dropped, cfg::DropRule::KeyCodeOutOfRange, "Hotkeys", key) != nullptr)) {
         Fail(name, std::string("[Hotkeys] ") + key + " dropped as out of range does not match its code");
     }
-    return vk != 0 && !outOfRange;
+    if (modifier != (FindDrop(dropped, cfg::DropRule::ModifierKey, "Hotkeys", key) != nullptr)) {
+        Fail(name, std::string("[Hotkeys] ") + key + " dropped as a modifier key does not match its code");
+    }
+    return vk != 0 && !outOfRange && !modifier;
 }
 
 // Mod::Initialize at 43f310d, where [Position] Enabled chose between the first two modes and
@@ -598,7 +611,7 @@ int CheckReticle(const std::string& name, const legacy::Config& c, const cfg::Im
 void CheckDropRules(const std::string& name, const cfg::ImportResult& result) {
     for (const cfg::DroppedValue& d : result.dropped) {
         const bool approved = d.rule == cfg::DropRule::PoseShaping || d.rule == cfg::DropRule::Reticle ||
-                              d.rule == cfg::DropRule::KeyCodeOutOfRange;
+                              d.rule == cfg::DropRule::KeyCodeOutOfRange || d.rule == cfg::DropRule::ModifierKey;
         if (!approved) Fail(name, "the import drops [" + d.section + "] " + d.key + " by a rule this map never applies");
     }
 }
@@ -611,11 +624,123 @@ struct MigrationTally {
     int with_pose_shaping_dropped = 0;
     int with_reticle_dropped = 0;
     int with_n1 = 0;
+    int with_n3 = 0;
+    int with_row_changed = 0;
+    int with_mode_changed = 0;
 };
 
 // Every row's value, whatever Defaults.ini holds, so two Configs compare in full.
 std::string Values(const Config& c) {
     return cfg::RenderCanonical(StarfieldHT::MakeConfigTable(), c, {StarfieldHT::kConfigDisplayName});
+}
+
+// ---------------------------------------------------------------------------
+// Rows that follow Defaults.ini
+// ---------------------------------------------------------------------------
+
+using Concept = cfg::schema::Concept;
+
+// Every row the table binds, each of which follows Defaults.ini.
+const std::set<Concept>& AllRows() {
+    static const std::set<Concept> all = {
+        Concept::UdpPort,           Concept::EnableOnStartup,      Concept::WorldSpaceYaw,
+        Concept::RotationEnabled,   Concept::LocalSmoothing,       Concept::RemoteSmoothing,
+        Concept::PositionEnabled,   Concept::PositionLimitX,       Concept::PositionLimitY,
+        Concept::PositionLimitYDown, Concept::PositionLimitZ,      Concept::PositionLimitZBack,
+        Concept::ToggleKey,         Concept::CycleTrackingModeKey, Concept::YawModeKey,
+        Concept::LightFollowsHead,  Concept::LightMultiplier,
+    };
+    return all;
+}
+
+std::vector<Registration> KeysOf(const std::vector<Registration>& hotkeys, Action action) {
+    std::vector<Registration> out;
+    for (const Registration& r : hotkeys) {
+        if (r.action == action) out.push_back(r);
+    }
+    return out;
+}
+
+// The rows the player never changed: each reads in the import's startup as it does with no file.
+// The mode pair is both rows or neither, and the published build had no light setting.
+std::set<Concept> UntouchedRows(const Startup& imported, const Startup& none) {
+    std::set<Concept> changed;
+    const auto row = [&changed](bool same, Concept c) {
+        if (!same) changed.insert(c);
+    };
+    row(imported.port == none.port, Concept::UdpPort);
+    row(imported.enabled == none.enabled, Concept::EnableOnStartup);
+    row(imported.world_yaw == none.world_yaw, Concept::WorldSpaceYaw);
+    row(imported.mode == none.mode, Concept::RotationEnabled);
+    row(imported.mode == none.mode, Concept::PositionEnabled);
+    row(imported.local_smoothing == none.local_smoothing, Concept::LocalSmoothing);
+    row(imported.remote_smoothing == none.remote_smoothing, Concept::RemoteSmoothing);
+    row(imported.limit_x == none.limit_x, Concept::PositionLimitX);
+    row(imported.limit_y == none.limit_y, Concept::PositionLimitY);
+    row(imported.limit_y_down == none.limit_y_down, Concept::PositionLimitYDown);
+    row(imported.limit_z == none.limit_z, Concept::PositionLimitZ);
+    row(imported.limit_z_back == none.limit_z_back, Concept::PositionLimitZBack);
+    row(KeysOf(imported.hotkeys, Action::Toggle) == KeysOf(none.hotkeys, Action::Toggle), Concept::ToggleKey);
+    row(KeysOf(imported.hotkeys, Action::CycleMode) == KeysOf(none.hotkeys, Action::CycleMode),
+        Concept::CycleTrackingModeKey);
+    row(KeysOf(imported.hotkeys, Action::YawMode) == KeysOf(none.hotkeys, Action::YawMode), Concept::YawModeKey);
+    std::set<Concept> untouched;
+    for (const Concept c : AllRows()) {
+        if (!changed.count(c)) untouched.insert(c);
+    }
+    return untouched;
+}
+
+std::string RowNames(const std::set<Concept>& rows) {
+    std::string text;
+    for (const Concept c : rows) {
+        text += (text.empty() ? "" : ", ") + std::string(cfg::schema::kConcepts[static_cast<size_t>(c)].name);
+    }
+    return text.empty() ? "none" : text;
+}
+
+// `c` with every row in `follows` as `defaults_ini` gives it: what the session runs on over that
+// Defaults.ini.
+Config OverDefaults(Config c, const std::set<Concept>& follows, const Config& defaults_ini) {
+    for (const Concept row : follows) {
+        switch (row) {
+            case Concept::UdpPort: c.udp_port = defaults_ini.udp_port; break;
+            case Concept::EnableOnStartup: c.enable_on_startup = defaults_ini.enable_on_startup; break;
+            case Concept::WorldSpaceYaw: c.world_space_yaw = defaults_ini.world_space_yaw; break;
+            case Concept::RotationEnabled: c.rotation_enabled = defaults_ini.rotation_enabled; break;
+            case Concept::PositionEnabled: c.position_enabled = defaults_ini.position_enabled; break;
+            case Concept::LocalSmoothing:
+                c.local_smoothing = defaults_ini.local_smoothing;
+                c.position.local_smoothing = defaults_ini.position.local_smoothing;
+                break;
+            case Concept::RemoteSmoothing:
+                c.remote_smoothing = defaults_ini.remote_smoothing;
+                c.position.remote_smoothing = defaults_ini.position.remote_smoothing;
+                break;
+            case Concept::PositionLimitX: c.position.limit_x = defaults_ini.position.limit_x; break;
+            case Concept::PositionLimitY: c.position.limit_y = defaults_ini.position.limit_y; break;
+            case Concept::PositionLimitYDown: c.position.limit_y_down = defaults_ini.position.limit_y_down; break;
+            case Concept::PositionLimitZ: c.position.limit_z = defaults_ini.position.limit_z; break;
+            case Concept::PositionLimitZBack: c.position.limit_z_back = defaults_ini.position.limit_z_back; break;
+            case Concept::ToggleKey: c.toggle_key_name = defaults_ini.toggle_key_name; break;
+            case Concept::CycleTrackingModeKey:
+                c.cycle_tracking_mode_key_name = defaults_ini.cycle_tracking_mode_key_name;
+                break;
+            case Concept::YawModeKey: c.yaw_mode_key_name = defaults_ini.yaw_mode_key_name; break;
+            case Concept::LightFollowsHead: c.light.follows_head = defaults_ini.light.follows_head; break;
+            case Concept::LightMultiplier: c.light.multiplier = defaults_ini.light.multiplier; break;
+            default: throw std::logic_error("a row the table does not bind follows Defaults.ini");
+        }
+    }
+    return c;
+}
+
+// A row, or both rows of the tracking mode, which Defaults.ini gives as one unit.
+std::set<Concept> Pair(Concept row) {
+    if (row == Concept::RotationEnabled || row == Concept::PositionEnabled) {
+        return {Concept::RotationEnabled, Concept::PositionEnabled};
+    }
+    return {row};
 }
 
 // ---------------------------------------------------------------------------
@@ -632,6 +757,8 @@ struct Folders {
     // from them on every global row the table binds.
     std::wstring defaults;
     std::wstring skewed_defaults;
+    // What the skewed Defaults.ini sets every row to.
+    Config skewed_values;
 };
 
 const wchar_t kIniName[] = L"HeadTracking.ini";
@@ -698,6 +825,12 @@ std::optional<Config> Migrate(const std::wstring& folder, const std::wstring& de
     return loaded.config;
 }
 
+// The inputs no player edited: every row follows Defaults.ini, and the migration gives the
+// committed file.
+bool IsUnedited(const std::string& name) {
+    return name == "empty file" || name == "shipped, dev" || name == "first run, dev";
+}
+
 void MigrateInput(const Folders& f, const std::string& name, const std::optional<std::string>& bytes,
                   const ImportRun& i, const cfg::ImportResult* result, MigrationTally& tally) {
     EmptyFolder(f.migration);
@@ -717,12 +850,32 @@ void MigrateInput(const Folders& f, const std::string& name, const std::optional
     }
 
     ++tally.converted;
+    const std::set<Concept> follows(result->follows_defaults_ini.begin(), result->follows_defaults_ini.end());
+    if (follows.size() != result->follows_defaults_ini.size()) Fail(name, "follows_defaults_ini names a row twice");
+    const std::set<Concept> untouched =
+        UntouchedRows(FromImport(name, i.cfg, result->dropped), FromImport(name, legacy::Config{}, {}));
+    if (follows != untouched) {
+        Fail(name, "the rows left to Defaults.ini are " + RowNames(follows) + ", the untouched rows " +
+                       RowNames(untouched));
+    }
+    if (untouched != AllRows()) ++tally.with_row_changed;
+    if (!untouched.count(Concept::RotationEnabled)) ++tally.with_mode_changed;
+    if (IsUnedited(name)) {
+        if (untouched != AllRows()) Fail(name, "an input no player edited changes a row");
+        if (ReadBytes(f.migration + L"\\" + kCanonicalName) != tally.committed) {
+            Fail(name, "an input no player edited does not migrate to HeadTracking.ini as committed");
+        }
+    }
     if (CheckPoseShaping(name, i.cfg, *result) > 0) ++tally.with_pose_shaping_dropped;
     if (CheckReticle(name, i.cfg, *result) > 0) ++tally.with_reticle_dropped;
     CheckDropRules(name, *result);
     if (std::any_of(result->dropped.begin(), result->dropped.end(),
                     [](const cfg::DroppedValue& d) { return d.rule == cfg::DropRule::KeyCodeOutOfRange; })) {
         ++tally.with_n1;
+    }
+    if (std::any_of(result->dropped.begin(), result->dropped.end(),
+                    [](const cfg::DroppedValue& d) { return d.rule == cfg::DropRule::ModifierKey; })) {
+        ++tally.with_n3;
     }
     for (const std::string& d : StartupDifferences(FromImport(name, i.cfg, result->dropped), FromMigration(*migrated))) {
         Fail(name, "comparison 2: " + d);
@@ -740,8 +893,24 @@ void MigrateInput(const Folders& f, const std::string& name, const std::optional
     EmptyFolder(f.skewed);
     WriteBytes(f.skewed + L"\\" + kIniName, *bytes);
     const std::optional<Config> overSkewed = Migrate(f.skewed, f.skewed_defaults, name + " (skewed Defaults.ini)", tally);
-    if (overSkewed && Values(*overSkewed) != Values(*migrated)) {
-        Fail(name, "the migration gives other settings over a Defaults.ini that differs on every global row");
+    if (overSkewed && Values(*overSkewed) != Values(OverDefaults(*migrated, follows, f.skewed_values))) {
+        Fail(name, "over a Defaults.ini that differs on every global row, an untouched row does not take its value "
+                   "or a changed row does not keep the player's");
+    }
+    if (overSkewed) {
+        const std::string written = ReadBytes(f.skewed + L"\\" + kCanonicalName);
+        // A changed row is written default only where the player's value is what this
+        // Defaults.ini gives.
+        for (const Concept row : AllRows()) {
+            const std::string key = cfg::schema::kConcepts[static_cast<size_t>(row)].key;
+            const bool writtenDefault = written.find("\r\n" + key + "=default\r\n") != std::string::npos;
+            const bool asDefaultsIni = Values(OverDefaults(*migrated, Pair(row), f.skewed_values)) == Values(*migrated);
+            if (follows.count(row) ? !writtenDefault : writtenDefault != asDefaultsIni) {
+                Fail(name, key + (follows.count(row) ? " follows Defaults.ini and is not written default"
+                                                     : " was changed and is written default though Defaults.ini "
+                                                       "gives another value, or the other way round"));
+            }
+        }
     }
 }
 
@@ -795,7 +964,7 @@ std::string WithValue(const std::string& text, const std::string& key, const std
 
 // Every hotkey code the frozen reader accepts, 0x01 to 0xFE, on all three hotkeys at once. The
 // corpus tries one alternate code per hotkey; this is where the codes the key table has no name
-// for, or names only as a modifier (0x10-0x12), have to come through the migration as keys.
+// for have to come through the migration as keys, and a Ctrl, Shift or Alt key alone as unbound.
 std::vector<std::pair<std::string, std::string>> EveryHotkeyCode(const std::string& shipped) {
     std::vector<std::pair<std::string, std::string>> inputs;
     for (int vk = 0x01; vk <= 0xFE; ++vk) {
@@ -890,11 +1059,25 @@ int main() {
         CreateDirectoryW(root.c_str(), nullptr);
         const std::wstring global = MakeFolder(root, L"global");
         const std::wstring skewedGlobal = MakeFolder(root, L"skewed-global");
-        const Folders folders{MakeFolder(root, L"oracle"),    MakeFolder(root, L"import"),
-                              MakeFolder(root, L"migration"), MakeFolder(root, L"read-only"),
-                              MakeFolder(root, L"skewed"),    global + L"\\Defaults.ini",
-                              skewedGlobal + L"\\Defaults.ini"};
+        Folders folders{MakeFolder(root, L"oracle"),    MakeFolder(root, L"import"),
+                        MakeFolder(root, L"migration"), MakeFolder(root, L"read-only"),
+                        MakeFolder(root, L"skewed"),    global + L"\\Defaults.ini",
+                        skewedGlobal + L"\\Defaults.ini", StarfieldHT::MakeConfigTable().defaults()};
         WriteBytes(folders.skewed_defaults, kSkewedDefaults);
+        {
+            const cfg::CanonicalIni doc = cfg::ParseCanonicalIni(kSkewedDefaults);
+            if (!doc.IsReadable() || !doc.diagnostics.empty() ||
+                !cfg::ApplyCanonical(doc, StarfieldHT::MakeConfigTable(), folders.skewed_values).diagnostics.empty()) {
+                Fail("skewed Defaults.ini", "it does not set every row without a diagnostic");
+            }
+            const Config builtIn = StarfieldHT::MakeConfigTable().defaults();
+            for (const Concept row : AllRows()) {
+                if (Values(OverDefaults(builtIn, Pair(row), folders.skewed_values)) == Values(builtIn)) {
+                    Fail("skewed Defaults.ini", std::string(cfg::schema::kConcepts[static_cast<size_t>(row)].name) +
+                                                    " is at its built-in value");
+                }
+            }
+        }
         MigrationTally tally;
         tally.committed = ReadBytes(Widen(SF_COMMITTED_CONFIG));
 
@@ -955,6 +1138,13 @@ int main() {
         std::printf("  %d with the crosshair or ship aim circle switched off the aim dropped (reticle)\n",
                     tally.with_reticle_dropped);
         std::printf("  %d with a hotkey code outside 0x01-0xFE unbound (N1)\n", tally.with_n1);
+        std::printf("  %d with a hotkey on Ctrl, Shift or Alt alone unbound (N3)\n", tally.with_n3);
+        std::printf("  %d with a row changed from the published build's default, %d of them the tracking mode\n",
+                    tally.with_row_changed, tally.with_mode_changed);
+        if (tally.with_n3 == 0) Fail("N3", "no input binds a hotkey to a modifier key alone");
+        if (tally.with_row_changed == 0 || tally.with_mode_changed == 0) {
+            Fail("follows Defaults.ini", "no input changes a row, or none the tracking mode");
+        }
         if (tally.with_pose_shaping_dropped == 0) Fail("pose shaping", "no input drops a changed value");
         if (tally.with_reticle_dropped == 0) Fail("reticle", "no input drops a crosshair switch");
         if (tally.migrated.count(tally.committed) == 0) Fail("first run", "no input migrated to the committed file");
