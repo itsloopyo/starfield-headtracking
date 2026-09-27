@@ -83,6 +83,7 @@ try {
 }
 
 $tagName = "v$Version"
+Assert-ReleaseNotBelowCanonicalSince -RepoRoot $projectDir -Version $Version
 
 # Step 2: git preconditions
 $currentBranch = git rev-parse --abbrev-ref HEAD
