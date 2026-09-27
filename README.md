@@ -4,16 +4,10 @@
 
 An unofficial head tracking mod for Starfield that moves the view with your head while your mouse or controller keeps aiming, driven by a webcam, phone, or any OpenTrack compatible tracker, with no VR headset required.
 
-**Updating from an earlier version?** Settings now live in `CameraUnlock.ini`
-next to `Starfield.exe`. The first start of this version reads your settings
-from `HeadTracking.ini` into it and leaves `HeadTracking.ini` as it was. See
-[Configuration](#configuration).
-
 ## Features
 
-- **Decoupled look and aim** - look around with your head while your mouse or controller controls aim. Ship lock-on acquisition follows your view.
+- **Decoupled look and aim** - look around with your head while your mouse or controller controls aim
 - **6DOF positional tracking** - lean, peek and duck as well as turning your head
-- **Helmet light follows your head** - the beam points where you look, not where you aim
 - **Works with any OpenTrack compatible tracker** - free options available for PC, iOS and Android
 
 ## Requirements
@@ -279,13 +273,6 @@ LightMultiplier=default
 ```
 <!-- /cameraunlock:config -->
 
-Earlier versions also read these settings, which this version no longer
-reads: `YawMultiplier`, `PitchMultiplier` and `RollMultiplier` under
-`[Sensitivity]`, `SensitivityX`, `SensitivityY` and `SensitivityZ` under
-`[Position]`, `[Crosshair] Show`, `[Ship] AimUIFollowsHead` and
-`[Hotkeys] AdsModeKey`. The game's crosshair and the ship's aim circle always
-follow your aim now, and head tracking stays on through the sights.
-
 `WorldSpaceYaw=true` (default) keeps "up" locked to the world horizon. Yawing
 while looking at the floor still pans left and right, and leaning still moves
 your eye across the ground rather than into it. Set it to `false` to use the
@@ -334,7 +321,7 @@ Download the new release and run `install.cmd` again. Your config is preserved.
 ## Uninstalling
 
 Run `uninstall.cmd`. This removes the mod files and leaves `CameraUnlock.ini`
-and `HeadTracking.ini` in place, so your settings survive a reinstall. The ASI
+in place, so your settings survive a reinstall. The ASI
 loader is only removed if the installer put it there; if you already had your
 own, it is left alone. Use `uninstall.cmd /force` to remove it anyway.
 
