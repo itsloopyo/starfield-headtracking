@@ -169,6 +169,13 @@ void TestTogglesSave() {
         Check(ChangedLines(committed, afterYaw) == std::vector<std::string>{"WorldSpaceYaw=false"},
               "saving the yaw mode writes its value over default and changes nothing else");
 
+        Check(!created.config.true_free_look, "TrueFreeLook starts off: sights locked is the default");
+        const cfg::ConfigSaveResult freeLook = owner.Save([](Config& c) { c.true_free_look = true; });
+        Check(freeLook.status == cfg::ConfigSaveStatus::Saved, "true free look saves");
+        const std::string afterFreeLook = ReadBytes(path);
+        Check(ChangedLines(afterYaw, afterFreeLook) == std::vector<std::string>{"TrueFreeLook=true"},
+              "saving true free look writes its value over default and changes nothing else");
+
         const auto rotationOnly = cameraunlock::EncodeTrackingMode(cameraunlock::TrackingMode::RotationOnly);
         Check(owner.Save([rotationOnly](Config& c) {
                   c.rotation_enabled = rotationOnly.rotation_enabled;
@@ -176,7 +183,7 @@ void TestTogglesSave() {
               }).status == cfg::ConfigSaveStatus::Saved,
               "the tracking mode saves");
         const std::string afterRotationOnly = ReadBytes(path);
-        Check(ChangedLines(afterYaw, afterRotationOnly) ==
+        Check(ChangedLines(afterFreeLook, afterRotationOnly) ==
                   std::vector<std::string>{"RotationEnabled=true", "PositionEnabled=false"},
               "saving rotation only writes both tracking mode rows over default and changes nothing else");
 
@@ -204,8 +211,8 @@ void TestTogglesSave() {
     const auto again = reopened.Load();
     Check(again.status == cfg::ConfigLoadStatus::Canonical && again.diagnostics.empty() &&
               !again.config.world_space_yaw && !again.config.rotation_enabled && again.config.position_enabled &&
-              again.config.enable_on_startup,
-          "the saved yaw and tracking mode come back at the next start");
+              again.config.true_free_look && again.config.enable_on_startup,
+          "the saved yaw mode, true free look and tracking mode come back at the next start");
 
     RemoveScratchFolder(dir);
     RemoveScratchFolder(global);
@@ -238,6 +245,24 @@ void TestDefaultRowsFollowDefaultsIni() {
     RemoveScratchFolder(global);
 }
 
+// The retired sights cycle's ads_mode line, left in a file by hand or by an older tool, loads
+// without refusing the file and is never read as true free look: its tracked mode was not free
+// look.
+void TestAdsModeIsNotTrueFreeLook() {
+    const std::wstring dir = ScratchFolder(L"adsmode");
+    const std::wstring global = ScratchFolder(L"adsmode-global");
+    for (const char* value : {"tracked", "paused", "marker"}) {
+        WriteBytes(dir + kConfigFileName,
+                   Replace(Rendered(), "[Position]\r\n", std::string("[Position]\r\nads_mode=") + value + "\r\n"));
+        const auto loaded = cfg::ConfigOwner<Config>(Options(dir, global + L"Defaults.ini")).Load();
+        Check(loaded.status == cfg::ConfigLoadStatus::Canonical,
+              std::string("a file carrying ads_mode=") + value + " loads, not " + cfg::ConfigLoadStatusName(loaded.status));
+        Check(!loaded.config.true_free_look, std::string("ads_mode=") + value + " leaves true free look off");
+    }
+    RemoveScratchFolder(dir);
+    RemoveScratchFolder(global);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -257,6 +282,7 @@ int main(int argc, char** argv) {
         TestLegacyDefaultsMapToTheDefaults();
         TestTogglesSave();
         TestDefaultRowsFollowDefaultsIni();
+        TestAdsModeIsNotTrueFreeLook();
     } catch (const std::exception& e) {
         std::printf("FAIL: %s\n", e.what());
         return 1;

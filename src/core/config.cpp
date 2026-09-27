@@ -107,6 +107,10 @@ cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
     follows.Setting(C::YawModeKey, c.yawModeKey, shipped.yawModeKey);
     follows.NotInLegacy(C::LightFollowsHead);
     follows.NotInLegacy(C::LightMultiplier);
+    // The builds before had no true free look. Their sights cycle on the same keys was a
+    // different feature, so neither its mode nor its key carries over.
+    follows.NotInLegacy(C::TrueFreeLook);
+    follows.NotInLegacy(C::TrueFreeLookKey);
 
     return status == legacy::ReadStatus::Absent
                ? cfg::ImportResult::Absent(std::move(dropped), std::move(shaping), follows.Concepts())
@@ -119,14 +123,15 @@ cfg::ConfigTable<Config> MakeConfigTable() {
     using C = cfg::schema::Concept;
     cfg::ConfigTable<Config> table = cfg::HeadTrackingConfigTable<Config>(
         {C::UdpPort, C::EnableOnStartup, C::WorldSpaceYaw, C::RotationEnabled, C::LocalSmoothing,
-         C::RemoteSmoothing, C::PositionEnabled, C::PositionLimitX, C::PositionLimitY, C::PositionLimitYDown,
-         C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey, C::YawModeKey,
-         C::LightFollowsHead, C::LightMultiplier});
+         C::RemoteSmoothing, C::PositionEnabled, C::TrueFreeLook, C::PositionLimitX, C::PositionLimitY,
+         C::PositionLimitYDown, C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey,
+         C::YawModeKey, C::TrueFreeLookKey, C::LightFollowsHead, C::LightMultiplier});
     table.Select(C::WorldSpaceYaw).Writable()
         .Comment("true: yaw turns around the world's up axis and a lean moves along the ground.\n"
                  "false: both follow the camera's own axes.")
         .Select(C::RotationEnabled).Writable()
-        .Select(C::PositionEnabled).Writable();
+        .Select(C::PositionEnabled).Writable()
+        .Select(C::TrueFreeLook).Writable();
     return table;
 }
 

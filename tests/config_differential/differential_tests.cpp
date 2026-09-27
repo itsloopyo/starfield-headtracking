@@ -648,7 +648,8 @@ const std::set<Concept>& AllRows() {
         Concept::PositionEnabled,   Concept::PositionLimitX,       Concept::PositionLimitY,
         Concept::PositionLimitYDown, Concept::PositionLimitZ,      Concept::PositionLimitZBack,
         Concept::ToggleKey,         Concept::CycleTrackingModeKey, Concept::YawModeKey,
-        Concept::LightFollowsHead,  Concept::LightMultiplier,
+        Concept::LightFollowsHead,  Concept::LightMultiplier,      Concept::TrueFreeLook,
+        Concept::TrueFreeLookKey,
     };
     return all;
 }
@@ -662,7 +663,8 @@ std::vector<Registration> KeysOf(const std::vector<Registration>& hotkeys, Actio
 }
 
 // The rows the player never changed: each reads in the import's startup as it does with no file.
-// The mode pair is both rows or neither, and the published build had no light setting.
+// The mode pair is both rows or neither, and the published build had no light setting and no
+// true free look.
 std::set<Concept> UntouchedRows(const Startup& imported, const Startup& none) {
     std::set<Concept> changed;
     const auto row = [&changed](bool same, Concept c) {
@@ -729,6 +731,8 @@ Config OverDefaults(Config c, const std::set<Concept>& follows, const Config& de
             case Concept::YawModeKey: c.yaw_mode_key_name = defaults_ini.yaw_mode_key_name; break;
             case Concept::LightFollowsHead: c.light.follows_head = defaults_ini.light.follows_head; break;
             case Concept::LightMultiplier: c.light.multiplier = defaults_ini.light.multiplier; break;
+            case Concept::TrueFreeLook: c.true_free_look = defaults_ini.true_free_look; break;
+            case Concept::TrueFreeLookKey: c.true_free_look_key_name = defaults_ini.true_free_look_key_name; break;
             default: throw std::logic_error("a row the table does not bind follows Defaults.ini");
         }
     }
@@ -769,9 +773,9 @@ const char kSkewedDefaults[] =
     "[Network]\r\nUdpPort=5252\r\n\r\n"
     "[General]\r\nEnableOnStartup=false\r\nWorldSpaceYaw=false\r\nRotationEnabled=true\r\n\r\n"
     "[Smoothing]\r\nLocalSmoothing=0.5\r\nRemoteSmoothing=0.5\r\n\r\n"
-    "[Position]\r\nPositionEnabled=false\r\nPositionLimitX=0.25\r\nPositionLimitY=0.25\r\n"
+    "[Position]\r\nPositionEnabled=false\r\nTrueFreeLook=true\r\nPositionLimitX=0.25\r\nPositionLimitY=0.25\r\n"
     "PositionLimitYDown=0.25\r\nPositionLimitZ=0.25\r\nPositionLimitZBack=0.25\r\n\r\n"
-    "[Hotkeys]\r\nToggleKey=F8\r\nCycleTrackingModeKey=F9\r\nYawModeKey=F10\r\n\r\n"
+    "[Hotkeys]\r\nToggleKey=F8\r\nCycleTrackingModeKey=F9\r\nYawModeKey=F10\r\nTrueFreeLookKey=F11\r\n\r\n"
     "[Light]\r\nLightFollowsHead=false\r\nLightMultiplier=1.0\r\n";
 
 cfg::ConfigOwnerOptions<Config> Options(const std::wstring& folder, const std::wstring& defaults) {

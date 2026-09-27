@@ -25,6 +25,12 @@ public:
     void ToggleYawMode();
     bool IsWorldSpaceYaw() const { return m_worldSpaceYaw.load(); }
 
+    // Sights locked (false) draws the weapon from the clean eye, so a lean never takes the eye
+    // off the sights. True free look draws it from the tracked eye, so the weapon stays put in
+    // the world and the head moves around it.
+    void ToggleTrueFreeLook();
+    bool IsTrueFreeLook() const { return m_trueFreeLook.load(std::memory_order_relaxed); }
+
     // F8 cycles axis isolation for diagnostic testing.
     // 0 = normal, 1 = pitch-only, 2 = yaw-only, 3 = roll-only.
     void CycleAxisIsolation();
@@ -81,6 +87,8 @@ private:
 
     // Yaw mode: true = horizon-locked (world), false = camera-local
     std::atomic<bool> m_worldSpaceYaw{true};
+
+    std::atomic<bool> m_trueFreeLook{false};
 
     // Axis isolation for diagnostic testing (0=normal, 1=pitch, 2=yaw, 3=roll)
     std::atomic<int> m_axisIsolation{0};

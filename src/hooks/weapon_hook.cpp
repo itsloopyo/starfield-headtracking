@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "weapon_hook.h"
 #include "core/logger.h"
+#include "core/mod.h"
 #include "game/build_profile.h"
 #include "game/weapon_projection.h"
 #include "camera_hook.h"
@@ -136,7 +137,7 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             std::memcpy(adjusted, camera, sizeof(adjusted));
             NiMatrix44 view{}, inverse{};
             CompensateWeaponProjection(frame.clean, drawn, worldRight / frustum[1], worldTop / frustum[2],
-                                      adjusted, view, inverse);
+                                      Mod::Instance().IsTrueFreeLook(), adjusted, view, inverse);
             std::memcpy(adjusted + kRenderViewFloat, &view, sizeof(view));
             std::memcpy(adjusted + kRenderInverseFloat, &inverse, sizeof(inverse));
             g_original(previous, reset, adjusted, frustum, ortho, jitter, pass, output);

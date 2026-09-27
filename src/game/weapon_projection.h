@@ -5,7 +5,7 @@
 namespace StarfieldHT {
 
 inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBasis& drawn,
-                                      float scaleX, float scaleY, float eye[3],
+                                      float scaleX, float scaleY, bool trueFreeLook, float eye[3],
                                       NiMatrix44& view, NiMatrix44& inverseView) {
     Mat3 stretch{}, inverseStretch{}, drawnView{};
     for (int i = 0; i < 3; ++i) {
@@ -34,11 +34,14 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
         }
     }
     view.entry[3][3] = inverseView.entry[3][3] = 1.0f;
-    // Drawn from the clean eye, so a lean leaves the weapon where it is. The
-    // weapon sits about a third of a metre from the eye, so the lean's honest
-    // parallax would throw it most of the way across the frame and take the
-    // sights off the eye while aiming.
-    for (int i = 0; i < 3; ++i) eye[i] = clean.e[i];
+    // Sights locked draws from the clean eye, so a lean leaves the weapon where
+    // it is in the frame. The weapon sits about a third of a metre from the eye,
+    // so the lean's honest parallax would throw it most of the way across the
+    // frame and take the sights off the eye while aiming. True free look draws
+    // from the tracked eye and keeps that parallax: the weapon stays put in the
+    // world and the head moves around it.
+    const float* from = trueFreeLook ? drawn.e : clean.e;
+    for (int i = 0; i < 3; ++i) eye[i] = from[i];
 }
 
 }

@@ -20,8 +20,8 @@ constexpr const char* kConfigDisplayName = "Starfield";
 // Core's config, at core's defaults, which are the values every published build shipped.
 struct Config : cameraunlock::HeadTrackingConfig {};
 
-// The rows of CameraUnlock.ini. Only the tracking mode pair and WorldSpaceYaw are Writable:
-// the mode and yaw hotkeys save the player's choice, and End changes the session only.
+// The rows of CameraUnlock.ini. Only the tracking mode pair, WorldSpaceYaw and TrueFreeLook are
+// Writable: their hotkeys save the player's choice, and End changes the session only.
 cameraunlock::config::ConfigTable<Config> MakeConfigTable();
 
 // HeadTracking.ini as the builds before the canonical format read it (legacy_config/), mapped

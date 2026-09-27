@@ -31,10 +31,22 @@ int main() {
                     for (int i = 0; i < 3; ++i) axis[i] = drawn.f[i];
                     RotateBasis(drawn, axis, angle * 0.7f);
                     for (int i = 0; i < 3; ++i) drawn.e[i] += lean * (clean.r[i] + clean.u[i] + clean.f[i]);
+                    // Sights locked draws the weapon from the clean eye under any lean;
+                    // true free look from the tracked eye, with the same rotation.
+                    float freeEye[3];
+                    NiMatrix44 freeView{}, freeInverse{};
+                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, true, freeEye, freeView, freeInverse);
+                    for (int i = 0; i < 3; ++i) Near(freeEye[i], drawn.e[i], "true free look draws from the tracked eye");
                     float eye[3];
                     NiMatrix44 view{}, inverse{};
-                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, eye, view, inverse);
-                    for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "weapon is drawn from the clean eye");
+                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, false, eye, view, inverse);
+                    for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "sights locked draws from the clean eye");
+                    for (int i = 0; i < 4; ++i) {
+                        for (int j = 0; j < 4; ++j) {
+                            Near(freeView.entry[i][j], view.entry[i][j], "true free look keeps the weapon view rotation");
+                            Near(freeInverse.entry[i][j], inverse.entry[i][j], "true free look keeps the inverse view");
+                        }
+                    }
                     // The caller memcpys all 64 bytes of each matrix over the
                     // game's own, so the row and column the rotation does not
                     // write are part of the contract: a translation left in
