@@ -16,6 +16,13 @@ All notable changes to this project are documented here. The format follows
   `CameraUnlock.ini`. `LightFollowsHead=false` leaves the helmet light on your
   aim, and `LightMultiplier` sets how far it turns relative to your head: `1.0`
   matches the view, `0` keeps it pointing along your aim.
+- True free look, toggled with Insert or Ctrl+Shift+U. By default leaning never
+  takes your eye off the sights: the weapon is drawn from your unleaned eye. In
+  true free look the weapon stays put and your head moves freely around it, so
+  to see down the sights you have to put your head behind them. Switching
+  slides the weapon over a fraction of a second instead of jumping. The mode is
+  saved to `CameraUnlock.ini` as `[Position] TrueFreeLook` when you toggle it,
+  and its keys are `[Hotkeys] TrueFreeLookKey`.
 - A setting set to `default` in `CameraUnlock.ini` takes its value from
   `Defaults.ini`, which every head tracking mod that keeps its settings in
   `CameraUnlock.ini` reads. Head tracking mods that keep their settings in
@@ -96,9 +103,9 @@ All notable changes to this project are documented here. The format follows
   before.
 - `[Crosshair] Show` and `[Ship] AimUIFollowsHead`. The game's crosshair and the
   ship's aim circle always follow your aim.
-- `[Hotkeys] AdsModeKey`. Neither its key (Insert unless you changed it) nor
-  Ctrl+Shift+U cycles what the sights do any more: head tracking carries on
-  through the sights (be563fd).
+- `[Hotkeys] AdsModeKey` and the three aim modes it cycled. Head tracking
+  carries on through the sights (be563fd), and Insert and Ctrl+Shift+U now
+  toggle true free look.
 
 ## [0.0.0] - 2026-09-08
 

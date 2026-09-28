@@ -35,11 +35,11 @@ int main() {
                     // true free look from the tracked eye, with the same rotation.
                     float freeEye[3];
                     NiMatrix44 freeView{}, freeInverse{};
-                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, true, freeEye, freeView, freeInverse);
+                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 0.0f, freeEye, freeView, freeInverse);
                     for (int i = 0; i < 3; ++i) Near(freeEye[i], drawn.e[i], "true free look draws from the tracked eye");
                     float eye[3];
                     NiMatrix44 view{}, inverse{};
-                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, false, eye, view, inverse);
+                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 1.0f, eye, view, inverse);
                     for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "sights locked draws from the clean eye");
                     for (int i = 0; i < 4; ++i) {
                         for (int j = 0; j < 4; ++j) {
@@ -92,6 +92,58 @@ int main() {
             }
         }
     }
+
+    // The toggle slides the weapon's eye between the clean and the tracked eye
+    // instead of stepping it by the whole lean, and a press mid-slide turns back
+    // from where the eye is.
+    {
+        const float lean = 0.25f;
+        CameraBasis drawn = clean;
+        for (int i = 0; i < 3; ++i) drawn.e[i] += lean * clean.r[i];
+        const auto eyeOffset = [&](float cleanEyeShare) {
+            float eye[3];
+            NiMatrix44 view{}, inverse{};
+            CompensateWeaponProjection(clean, drawn, 1.0f, 1.0f, cleanEyeShare, eye, view, inverse);
+            const float offset[3] = {eye[0] - clean.e[0], eye[1] - clean.e[1], eye[2] - clean.e[2]};
+            return Dot3(offset, clean.r);
+        };
+        // Smoothstep's steepest slope is 1.5 over the leg, and the shorter leg is 150 ms.
+        const unsigned long long kFrameMs = 16;
+        const float kMaxFrameStep = lean * 1.5f * kFrameMs / 150.0f + 0.001f;
+        WeaponEye weaponEye;
+        unsigned long long now = 1000;
+        float last = eyeOffset(weaponEye.CleanEyeShare(false, now));
+        Near(last, 0.0f, "sights locked starts on the clean eye");
+        const auto run = [&](bool trueFreeLook, int frames) {
+            for (int frame = 0; frame < frames; ++frame) {
+                now += kFrameMs;
+                const float offset = eyeOffset(weaponEye.CleanEyeShare(trueFreeLook, now));
+                if (std::fabs(offset - last) > kMaxFrameStep) {
+                    std::printf("FAIL: the toggle stepped the weapon eye %.4f m in one frame\n", offset - last);
+                    ++failures;
+                }
+                last = offset;
+            }
+        };
+        run(true, 4);
+        if (!(last > 0.01f && last < lean - 0.01f)) {
+            std::printf("FAIL: the weapon eye is not mid-slide before the reversal: %.4f\n", last);
+            ++failures;
+        }
+        run(false, 1);
+        const float atReversal = last;
+        run(false, 3);
+        if (!(last < atReversal && last > 0.0f)) {
+            std::printf("FAIL: the reversal did not turn back from where the eye was: %.4f -> %.4f\n",
+                        atReversal, last);
+            ++failures;
+        }
+        run(true, 60);
+        Near(last, lean, "true free look settles on the tracked eye");
+        run(false, 30);
+        Near(last, 0.0f, "sights locked settles back on the clean eye");
+    }
+
     std::printf("Weapon projection: %d failures\n", failures);
     return failures ? 1 : 0;
 }

@@ -2,10 +2,12 @@
 
 #include "camera_math.h"
 
+#include <cameraunlock/ads/ads_fade.h>
+
 namespace StarfieldHT {
 
 inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBasis& drawn,
-                                      float scaleX, float scaleY, bool trueFreeLook, float eye[3],
+                                      float scaleX, float scaleY, float cleanEyeShare, float eye[3],
                                       NiMatrix44& view, NiMatrix44& inverseView) {
     Mat3 stretch{}, inverseStretch{}, drawnView{};
     for (int i = 0; i < 3; ++i) {
@@ -39,9 +41,21 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
     // so the lean's honest parallax would throw it most of the way across the
     // frame and take the sights off the eye while aiming. True free look draws
     // from the tracked eye and keeps that parallax: the weapon stays put in the
-    // world and the head moves around it.
-    const float* from = trueFreeLook ? drawn.e : clean.e;
-    for (int i = 0; i < 3; ++i) eye[i] = from[i];
+    // world and the head moves around it. cleanEyeShare is 1 in sights locked
+    // and 0 in true free look, and between the two while the toggle slides.
+    for (int i = 0; i < 3; ++i) eye[i] = drawn.e[i] + (clean.e[i] - drawn.e[i]) * cleanEyeShare;
 }
+
+// The toggle moves the weapon's eye by the whole lean, so it rides AdsFade
+// rather than stepping: 1 in sights locked, 0 in true free look.
+class WeaponEye {
+public:
+    float CleanEyeShare(bool trueFreeLook, unsigned long long nowMs) {
+        return m_fade.Update(trueFreeLook, nowMs);
+    }
+
+private:
+    cameraunlock::ads::AdsFade m_fade;
+};
 
 }

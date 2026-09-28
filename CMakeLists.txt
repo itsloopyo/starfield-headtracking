@@ -116,7 +116,10 @@ if(STARFIELDHT_BUILD_TESTS)
     )
     add_test(NAME lean_direction COMMAND starfieldht_lean_tests)
     add_executable(starfieldht_weapon_tests tests/weapon_projection_tests.cpp)
-    target_include_directories(starfieldht_weapon_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(starfieldht_weapon_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/cameraunlock-core/cpp/include
+    )
     add_test(NAME weapon_projection COMMAND starfieldht_weapon_tests)
     add_executable(starfieldht_aim_tests tests/aim_projection_tests.cpp)
     target_include_directories(starfieldht_aim_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

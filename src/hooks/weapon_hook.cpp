@@ -63,6 +63,16 @@ void ReportSubmitReadFailure() {
                              static_cast<unsigned long long>(n));
 }
 
+unsigned long long NowMs() {
+    static LARGE_INTEGER freq = {};
+    if (freq.QuadPart == 0) QueryPerformanceFrequency(&freq);
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    const unsigned long long q = static_cast<unsigned long long>(now.QuadPart);
+    const unsigned long long f = static_cast<unsigned long long>(freq.QuadPart);
+    return (q / f) * 1000ULL + ((q % f) * 1000ULL) / f;
+}
+
 CameraBasis RenderBasis(const float* camera) {
     CameraBasis basis{};
     for (size_t i = 0; i < 3; ++i) {
@@ -117,6 +127,7 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
     thread_local CameraFrame frame{};
     thread_local CameraBasis drawn{};
     thread_local bool matched = false;
+    thread_local WeaponEye weaponEye;
     if (pass == kWorldPass) {
         worldCamera = camera;
         worldRight = frustum[1];
@@ -136,8 +147,9 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             alignas(16) float adjusted[kRenderCameraFloats];
             std::memcpy(adjusted, camera, sizeof(adjusted));
             NiMatrix44 view{}, inverse{};
+            const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsTrueFreeLook(), NowMs());
             CompensateWeaponProjection(frame.clean, drawn, worldRight / frustum[1], worldTop / frustum[2],
-                                      Mod::Instance().IsTrueFreeLook(), adjusted, view, inverse);
+                                      cleanEyeShare, adjusted, view, inverse);
             std::memcpy(adjusted + kRenderViewFloat, &view, sizeof(view));
             std::memcpy(adjusted + kRenderInverseFloat, &inverse, sizeof(inverse));
             g_original(previous, reset, adjusted, frustum, ortho, jitter, pass, output);
