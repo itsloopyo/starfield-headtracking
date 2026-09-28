@@ -21,7 +21,7 @@ file is added.
 | miniz | 3.0.0 (inside Ultimate ASI Loader v9.7.2) | MIT | Compiled into the vendored loader DLL |
 | MinHook | v1.3.4 (`c3fcafd`), modified | BSD-2-Clause | Compiled into `StarfieldHeadTracking.asi` |
 | inih | r55, modified | BSD-3-Clause | Compiled into `StarfieldHeadTracking.asi` |
-| cameraunlock-core | ac271752d8fcf37e793b70744aa8eb12588d91ea | MIT | Compiled into `StarfieldHeadTracking.asi` |
+| cameraunlock-core | a03c24290fae3a9c61f67adcb7c5ba4eedf69f20 | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | OpenTrack | n/a | ISC | Not bundled; UDP protocol interoperability only |
 | CommonLibSF | n/a | GPL-3.0-or-later | Neither bundled nor linked; consulted on two struct layouts, see below |
 | Xbox GDK / Creation Engine 2 / Scaleform GFx | n/a | n/a | Neither bundled nor linked; see "Engine layout" below |
@@ -336,7 +336,7 @@ right. It ships as `licenses/cameraunlock-core-LICENSE.txt` in both release
 ZIPs and is reproduced here as well.
 
 - **Upstream:** https://github.com/itsloopyo/cameraunlock-core
-- **Version:** pinned commit `ac271752d8fcf37e793b70744aa8eb12588d91ea`
+- **Version:** pinned commit `a03c24290fae3a9c61f67adcb7c5ba4eedf69f20`
 - **License:** MIT
 - **Usage:** supplies the shared tracker receiver, pose interpolation,
   smoothing and camera maths.

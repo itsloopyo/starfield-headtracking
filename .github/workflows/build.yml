@@ -20,6 +20,10 @@ on:
       - 'docs/**'
       - 'LICENSE'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and Validate
@@ -42,13 +46,6 @@ jobs:
         uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
         with:
           run-install: false
-
-      # The camera boundary maths every rendered frame passes through has no
-      # other gate: without this the suites are compiled by `build-release` and
-      # then never executed anywhere.
-      - name: Run tests
-        shell: pwsh
-        run: pixi run test
 
       # Build + package through the SAME command a developer runs locally. All
       # build logic lives in the pixi task chain (setup -> build-release ->

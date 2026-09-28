@@ -3,11 +3,11 @@
 # Automated release workflow for Starfield Head Tracking.
 # Steps (per ~/.claude/CLAUDE.md "Build & Release"):
 #   1. Validate <version> (semver)
-#   2. Verify main branch, clean tree, tag unused
+#   2. Verify main branch, clean tree, tag unused, then pixi run test
 #   3. Generate CHANGELOG.md from commits since the last tag
 #   4. Update version in CMakeLists.txt (canonical), install.cmd MOD_VERSION,
 #      pixi.toml, src/core/constants.h, launcher-manifest.json
-#   5. pixi run test, then pixi run package (abort on failure)
+#   5. pixi run package (abort on failure)
 #   6. Commit "Release v<version>"
 #   7. Create annotated tag v<version>
 #   8. Push commits + tag (CI release workflow picks it up)
@@ -90,6 +90,18 @@ Write-Host "Current version: $currentVersion" -ForegroundColor Gray
 Write-Host "New version:     $Version" -ForegroundColor Green
 Write-Host ""
 
+Write-Host "Running the full test suite..." -ForegroundColor Cyan
+Push-Location $projectDir
+try {
+    pixi run test
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: pixi run test failed. Nothing was changed." -ForegroundColor Red
+        exit 1
+    }
+} finally {
+    Pop-Location
+}
+
 # THIRD-PARTY-NOTICES.md names the cameraunlock-core commit compiled into the
 # release ZIPs, and bumping the submodule does not touch it. Packaging refuses
 # to ship that mismatch, so a bump with no notices edit stopped the release
@@ -149,25 +161,15 @@ $launcherManifest = Get-Content $manifestJsonPath -Raw | ConvertFrom-Json
 $launcherManifest.mod_info.version = $Version
 $launcherManifest | ConvertTo-Json -Depth 10 | Set-Content $manifestJsonPath -NoNewline
 
-# Step 5: test, then package.
+# Step 5: package.
 #
 # `package`, not `build-release`: every gate that can reject a release lives in
 # the packager - the manifest seed check, the core-commit check, the missing-doc
 # and missing-vendor-file throws, and building the ZIPs themselves. Running only
 # the compiler here meant those fired in CI, after the commit and the tag had
 # already been pushed, and recovering meant deleting a published tag.
-#
-# The tests run first for the same reason: the camera boundary maths every
-# rendered frame passes through has no other gate before a user's machine.
-Write-Host "Running 'pixi run test'..." -ForegroundColor Cyan
 Push-Location $projectDir
 try {
-    & pixi run test
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: tests failed (exit $LASTEXITCODE). Aborting release." -ForegroundColor Red
-        exit 1
-    }
-
     Write-Host "Running 'pixi run package'..." -ForegroundColor Cyan
     & pixi run package
     if ($LASTEXITCODE -ne 0) {

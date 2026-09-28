@@ -29,7 +29,9 @@ build = { cmd = "cmake --build build --config Debug", depends-on = ["setup"] }
 build-release = { cmd = "cmake --build build --config Release", depends-on = ["setup"] }
 
 install = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1 Release", depends-on = ["build-release"] }
-test = { cmd = "ctest --test-dir build -C Release --output-on-failure", depends-on = ["build-release"] }
+test-unit = { cmd = "ctest --test-dir build -C Release --output-on-failure -LE differential", depends-on = ["build-release"] }
+test-differential = { cmd = "ctest --test-dir build -C Release --output-on-failure --no-tests=error -L differential", depends-on = ["build-release"] }
+test = { depends-on = ["test-unit", "test-differential"] }
 uninstall = "scripts\\uninstall.cmd"
 
 # Rewrites HeadTracking.ini, the committed config and the table's fresh render (the
@@ -49,7 +51,7 @@ clean-all = { cmd = """
     powershell -Command "if (Test-Path 'build') { Remove-Item 'build' -Recurse -Force }; if (Test-Path 'release') { Remove-Item 'release' -Recurse -Force }; Write-Host 'All build artifacts cleaned' -ForegroundColor Green"
 """ }
 
-package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["build-release", "test"] }
+package = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1", depends-on = ["build-release", "test-unit"] }
 release = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/release.ps1" }
 release-nightly = { cmd = "powershell -ExecutionPolicy Bypass -File scripts/release-nightly.ps1" }
 
