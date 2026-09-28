@@ -18,6 +18,24 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference    = 'SilentlyContinue'
 
+# Not Get-FileHash: Windows PowerShell 5.1 autoloads it from a script module,
+# and a powershell.exe started from pwsh (GitHub Actions' shell: pwsh)
+# inherits pwsh's PSModulePath, resolves the Core-only
+# Microsoft.PowerShell.Utility first and reports the cmdlet as not recognized.
+function Get-Sha256Hex {
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$LiteralPath)
+
+    $sha    = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead((Convert-Path -LiteralPath $LiteralPath))
+    try {
+        return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
 $scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectDir = Split-Path -Parent $scriptDir
 
@@ -82,7 +100,7 @@ try {
         Invoke-WebRequest -Uri $licenseUrl -OutFile $stageLic -UseBasicParsing -TimeoutSec 30 -Headers @{ "User-Agent" = "CameraUnlock-HeadTracking" }
     }
 
-    $dllSha = (Get-FileHash -Path $stageDll -Algorithm SHA256).Hash.ToLower()
+    $dllSha = (Get-Sha256Hex -LiteralPath $stageDll)
     if ($AllowedDllSha256 -notcontains $dllSha) {
         if (-not $AcceptNewHash) {
             throw @"
