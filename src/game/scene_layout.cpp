@@ -6,7 +6,6 @@
 #include "game/camera_math.h"
 #include "game/starfield_types.h"
 
-#include <cameraunlock/memory/pattern_scanner.h>
 #include <cameraunlock/memory/safe_memory.h>
 
 namespace StarfieldHT {
@@ -309,29 +308,23 @@ void LogFloatWindow(const char* what, uintptr_t base, uintptr_t from, uintptr_t 
 
 const SceneLayout& GetSceneLayout() { return g_layout; }
 
+bool InitializeSceneLayout(uintptr_t moduleBase, size_t moduleSize) {
+    g_moduleBase = moduleBase;
+    g_moduleSize = moduleSize;
+    g_niCameraVtable = FindVtableByRTTI(moduleBase, moduleSize, ".?AVNiCamera@@");
+    if (g_niCameraVtable == 0) {
+        Logger::Instance().Error("Scene layout: NiCamera vtable not found");
+        return false;
+    }
+    Logger::Instance().Info("Scene layout: NiCamera vtable 0x%llX (RVA 0x%llX)",
+                            static_cast<unsigned long long>(g_niCameraVtable),
+                            static_cast<unsigned long long>(g_niCameraVtable - moduleBase));
+    return true;
+}
+
 bool ResolveSceneLayout(void* playerCamera) {
     if (g_layout.valid) return true;
-    if (!playerCamera) return false;
-
-    HMODULE gameModule = GetModuleHandleA(GAME_EXE);
-    if (!gameModule) return false;
-    if (!cameraunlock::memory::GetModuleRange(gameModule, g_moduleBase, g_moduleSize)) return false;
-
-    if (g_niCameraVtable == 0) {
-        g_niCameraVtable = FindVtableByRTTI(g_moduleBase, g_moduleSize, ".?AVNiCamera@@");
-        if (g_niCameraVtable == 0) {
-            static bool logged = false;
-            if (!logged) {
-                logged = true;
-                Logger::Instance().Error("Scene layout: NiCamera vtable not found - staying dormant "
-                                         "(retrying every camera update, reported once)");
-            }
-            return false;
-        }
-        Logger::Instance().Info("Scene layout: NiCamera vtable 0x%llX (RVA 0x%llX)",
-                                static_cast<unsigned long long>(g_niCameraVtable),
-                                static_cast<unsigned long long>(g_niCameraVtable - g_moduleBase));
-    }
+    if (!playerCamera || g_niCameraVtable == 0) return false;
 
     const uintptr_t cam = reinterpret_cast<uintptr_t>(playerCamera);
     uintptr_t rootOffset = 0, childrenOffset = 0, cameraRoot = 0, niCamera = 0;

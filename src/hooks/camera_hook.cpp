@@ -482,7 +482,14 @@ bool ProjectPlayerAim(const CameraFrame& frame, float& outNdcX, float& outNdcY, 
     uintptr_t player = 0;
     float target[4];
     if (!SafeRead(g_playerAddress, player) || !player || !SafeRead(player + g_aimPointOffset, target)) {
-        Logger::Instance().Error("Cannot read the player's shooting aim point");
+        // Asked once per HUD frame, so a failure that persists is reported on a
+        // doubling count rather than a line a frame.
+        static std::atomic<uint64_t> s_failures{0};
+        const uint64_t n = s_failures.fetch_add(1, std::memory_order_relaxed) + 1;
+        if ((n & (n - 1)) == 0) {
+            Logger::Instance().Error("Cannot read the player's shooting aim point (total=%llu)",
+                                     static_cast<unsigned long long>(n));
+        }
         return false;
     }
     float relative[3];
@@ -537,6 +544,8 @@ bool InstallCameraHook() {
         return false;
     }
     g_playerCameraVtable = vtable;
+
+    if (!InitializeSceneLayout(moduleBase, moduleSize)) return false;
 
     // The vtable came out of a scan of the image, so the slot itself is read
     // through SafeRead: a match found in the last few bytes of the module would

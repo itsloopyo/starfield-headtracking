@@ -56,6 +56,16 @@ ScoreShipTarget g_scoreShipTarget = nullptr;
 ScoreSpaceTarget g_scoreSpaceTarget = nullptr;
 thread_local const CameraFrame* g_selectionFrame = nullptr;
 
+// The ship aim and lock paths run per shot and per frame, so a failure that
+// persists is written once a second rather than once a call.
+void ReportEverySecond(std::atomic<ULONGLONG>& last, const char* message) {
+    const ULONGLONG now = GetTickCount64();
+    ULONGLONG previous = last.load(std::memory_order_relaxed);
+    if (now - previous < 1000) return;
+    if (!last.compare_exchange_strong(previous, now, std::memory_order_relaxed)) return;
+    Logger::Instance().Error("%s", message);
+}
+
 uintptr_t PickWithCleanAim(uintptr_t result, uint32_t flags) {
     uintptr_t manager = 0, camera = 0;
     NiMatrix44 world{};
@@ -70,12 +80,8 @@ uintptr_t PickWithCleanAim(uintptr_t result, uint32_t flags) {
             ? FindSubmittedCameraFrame(drawn, frame) : FindConvertedCameraFrame(drawn, frame);
     }
     if (!matched) {
-        static thread_local ULONGLONG lastMismatch = 0;
-        const auto now = GetTickCount64();
-        if (now - lastMismatch >= 1000) {
-            lastMismatch = now;
-            Logger::Instance().Error("Ship target picker: no matching camera pose");
-        }
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship target picker: no matching camera pose");
     }
     const auto previous = g_selectionFrame;
     g_selectionFrame = matched ? &frame : nullptr;
@@ -137,7 +143,8 @@ uintptr_t GetShipLockCamera(uintptr_t manager) {
     if (!GetCameraFrame(frame)) return camera;
     alignas(16) thread_local unsigned char snapshot[0x220];
     if (!cameraunlock::memory::SafeRead(camera, snapshot)) {
-        Logger::Instance().Error("Ship lock: cannot read the camera snapshot");
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship lock: cannot read the camera snapshot");
         return camera;
     }
     const auto worldOffset = GetSceneLayout().worldTransformOffset;
@@ -149,12 +156,8 @@ uintptr_t GetShipLockCamera(uintptr_t manager) {
         ? FindSubmittedCameraFrame(drawn, frame)
         : FindConvertedCameraFrame(drawn, frame);
     if (!matched) {
-        static thread_local ULONGLONG lastMismatch = 0;
-        const auto now = GetTickCount64();
-        if (now - lastMismatch >= 1000) {
-            lastMismatch = now;
-            Logger::Instance().Error("Ship lock: no matching camera pose");
-        }
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship lock: no matching camera pose");
         return camera;
     }
     // The angle routine copies this basis immediately. Keep its camera read
@@ -197,7 +200,8 @@ bool BuildShipAim(uintptr_t context, uintptr_t camera, const float* screen, uint
         return g_shipAim(context, camera, screen, ship, weaponContext, muzzle, range, output);
     }
     if (!cameraunlock::memory::SafeRead(g_playerAddress, player)) {
-        Logger::Instance().Error("Ship aim: cannot read the player singleton");
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship aim: cannot read the player singleton");
         return g_shipAim(context, camera, screen, ship, weaponContext, muzzle, range, output);
     }
     if (player == 0 || g_shipPilot(ship) != player) {
@@ -209,7 +213,8 @@ bool BuildShipAim(uintptr_t context, uintptr_t camera, const float* screen, uint
     // retaining the pointer. A private snapshot keeps rendering out of this write.
     alignas(16) unsigned char snapshot[0x220];
     if (!cameraunlock::memory::SafeRead(camera, snapshot)) {
-        Logger::Instance().Error("Ship aim: cannot read the camera snapshot");
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship aim: cannot read the camera snapshot");
         return g_shipAim(context, camera, screen, ship, weaponContext, muzzle, range, output);
     }
     const auto worldOffset = GetSceneLayout().worldTransformOffset;
@@ -218,7 +223,8 @@ bool BuildShipAim(uintptr_t context, uintptr_t camera, const float* screen, uint
     CameraBasis drawn{};
     BasisFromRotation(RotationOf(world), world.entry[3], drawn);
     if (!FindConvertedCameraFrame(drawn, frame)) {
-        Logger::Instance().Error("Ship aim: no matching converted camera pose");
+        static std::atomic<ULONGLONG> s_last{0};
+        ReportEverySecond(s_last, "Ship aim: no matching converted camera pose");
         return g_shipAim(context, camera, screen, ship, weaponContext, muzzle, range, output);
     }
     WriteBasis(frame.clean, world);

@@ -377,17 +377,19 @@ void SerializeShipHudFloat(SerializeHudFloat original, uintptr_t object, uintptr
             // The target is already projected through the tracked camera. The
             // reticle container adds its offset after the HUD blends this point
             // with the ship heading, so remove that offset from this input only.
+            // A value that cannot be read is still handed on untouched: the game
+            // is mid-way through serialising the HUD, and skipping the call
+            // leaves its destination unwritten.
             alignas(8) unsigned char snapshot[0x20];
-            if (!cameraunlock::memory::SafeRead(object, snapshot)) {
-                Logger::Instance().Error("Ship lock UI: cannot read the outgoing float value");
+            if (cameraunlock::memory::SafeRead(object, snapshot)) {
+                float value = 0;
+                memcpy(&value, snapshot + 0x18, sizeof(value));
+                value += aimX ? -nx * 0.5f : ny * 0.5f;
+                memcpy(snapshot + 0x18, &value, sizeof(value));
+                original(reinterpret_cast<uintptr_t>(snapshot), context, destination, key);
                 return;
             }
-            float value = 0;
-            memcpy(&value, snapshot + 0x18, sizeof(value));
-            value += aimX ? -nx * 0.5f : ny * 0.5f;
-            memcpy(snapshot + 0x18, &value, sizeof(value));
-            original(reinterpret_cast<uintptr_t>(snapshot), context, destination, key);
-            return;
+            ReportTransientFailure("cannot read the outgoing ship lock UI value");
         }
     }
     original(object, context, destination, key);

@@ -39,8 +39,46 @@ bool IsInReadOnlyData(uintptr_t moduleBase, uint32_t rva) {
     return false;
 }
 
+// The two scans below walk one readable run each, from NextReadableRange, and
+// carry their own SEH frame: the run was readable when it was measured, but a
+// protection change can still race the scan, and losing that race must not
+// close the game. A fault ends the run's scan with no match.
+uintptr_t ScanRunForCol(uintptr_t moduleBase, uintptr_t runBase, size_t runSize, uint32_t typeDescRva) {
+    __try {
+        for (size_t off = 0; off + sizeof(RTTICompleteObjectLocator) <= runSize; off += 4) {
+            const uintptr_t addr = runBase + off;
+            const auto* candidate = reinterpret_cast<const RTTICompleteObjectLocator*>(addr);
+            if (candidate->signature == 1 &&
+                candidate->offset == 0 &&
+                candidate->pTypeDescriptor == typeDescRva &&
+                candidate->pSelf == static_cast<uint32_t>(addr - moduleBase)) {
+                return addr;
+            }
+        }
+    } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
+    }
+    return 0;
+}
+
+uintptr_t ScanRunForVtable(uintptr_t moduleBase, uintptr_t runBase, size_t runSize, uintptr_t colAddr) {
+    // Runs start on page boundaries, so 8-byte steps from the run base are
+    // 8-byte aligned in the image too.
+    __try {
+        for (size_t off = 0; off + sizeof(uintptr_t) <= runSize; off += sizeof(uintptr_t)) {
+            const uintptr_t addr = runBase + off;
+            if (*reinterpret_cast<const uintptr_t*>(addr) != colAddr) continue;
+            if (!IsInReadOnlyData(moduleBase, static_cast<uint32_t>(addr - moduleBase))) continue;
+            return addr + sizeof(uintptr_t);
+        }
+    } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
+    }
+    return 0;
+}
+
 } // namespace
 
+// Walked through NextReadableRange rather than straight across SizeOfImage: an
+// image can map a section PAGE_NOACCESS, and a raw read there closes the game.
 uintptr_t FindVtableByRTTI(uintptr_t moduleBase, size_t moduleSize, const char* className) {
     HMODULE gameModule = GetModuleHandleA(GAME_EXE);
 
@@ -52,29 +90,23 @@ uintptr_t FindVtableByRTTI(uintptr_t moduleBase, size_t moduleSize, const char* 
 
     const uint32_t typeDescRVA =
         static_cast<uint32_t>(reinterpret_cast<uintptr_t>(typeDesc) - moduleBase);
-    const uint8_t* scanStart = reinterpret_cast<const uint8_t*>(moduleBase);
+    const uintptr_t moduleEnd = moduleBase + moduleSize;
+    uintptr_t cursor = moduleBase, runBase = 0;
+    size_t runSize = 0;
+
     uintptr_t colAddr = 0;
-
-    for (size_t i = 0; i + sizeof(RTTICompleteObjectLocator) <= moduleSize; i += 4) {
-        const auto* candidate = reinterpret_cast<const RTTICompleteObjectLocator*>(scanStart + i);
-        if (candidate->signature == 1 &&
-            candidate->offset == 0 &&
-            candidate->pTypeDescriptor == typeDescRVA &&
-            candidate->pSelf == static_cast<uint32_t>(i)) {
-            colAddr = moduleBase + i;
-            break;
-        }
+    while (colAddr == 0 && cameraunlock::memory::NextReadableRange(cursor, moduleEnd, runBase, runSize)) {
+        colAddr = ScanRunForCol(moduleBase, runBase, runSize, typeDescRVA);
     }
-
     if (colAddr == 0) {
         Logger::Instance().Error("CompleteObjectLocator not found for: %s", className);
         return 0;
     }
 
-    for (size_t i = 0; i + 8 <= moduleSize; i += 8) {
-        if (*reinterpret_cast<const uintptr_t*>(scanStart + i) != colAddr) continue;
-        if (!IsInReadOnlyData(moduleBase, static_cast<uint32_t>(i))) continue;
-        return moduleBase + i + 8;
+    cursor = moduleBase;
+    while (cameraunlock::memory::NextReadableRange(cursor, moduleEnd, runBase, runSize)) {
+        const uintptr_t vtable = ScanRunForVtable(moduleBase, runBase, runSize, colAddr);
+        if (vtable != 0) return vtable;
     }
 
     Logger::Instance().Error("Vtable reference not found for: %s", className);

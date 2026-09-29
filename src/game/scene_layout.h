@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace StarfieldHT {
@@ -29,6 +30,11 @@ struct SceneLayout {
     uintptr_t worldToClipOffset = 0;   // NiCamera only
     uintptr_t frustumOffset = 0;       // NiCamera only
 };
+
+// Finds the NiCamera vtable the layout is matched against. The image scan
+// takes a few hundred milliseconds, so it runs on the init thread rather than
+// inside the first camera update, where it stalled the game's own frame.
+bool InitializeSceneLayout(uintptr_t moduleBase, size_t moduleSize);
 
 // Resolves the layout from a live PlayerCamera. Logs every field it finds and
 // the reason it gave up. Safe to call every frame; the result is cached after
