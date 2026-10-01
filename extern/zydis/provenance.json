@@ -1,0 +1,16 @@
+{
+  "release": "v4.1.1",
+  "published_at": "2025-02-16T00:17:45Z",
+  "sources": [
+    {
+      "repo": "zydis",
+      "commit": "a2278f1d254e492f6a6b39f6cb5d1f5d515659dc",
+      "archiveSha256": "efbca210596ef954241ef40732376d50be5b6b7ca7d63a3834ef0c71f3471f36"
+    },
+    {
+      "repo": "zycore-c",
+      "commit": "0b2432ced0884fd152b471d97ecf0258ff4d859f",
+      "archiveSha256": "698e4623e661db312eb9da327519f53f0a9dd7fbbfacf02159687bca62369467"
+    }
+  ]
+}

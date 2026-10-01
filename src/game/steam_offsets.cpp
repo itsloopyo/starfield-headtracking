@@ -1,4 +1,3 @@
-#include "pch.h"
 #include "build_profile.h"
 
 namespace StarfieldHT {

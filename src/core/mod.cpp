@@ -68,13 +68,8 @@ bool Mod::Initialize() {
 
     LoadConfig();
 
-    // An unrecognised build leaves the mod completely dormant. Only some of the
-    // hooks are pinned to profile RVAs; the camera hook resolves PlayerCamera
-    // by RTTI and would install on any build at all. Letting it install on its
-    // own is worse than not loading: the head-tracked transform then stays in
-    // the camera node all frame with no aim hook to hand the clean one back, so
-    // the game's crosshair pick, projectile spawn and interaction ray follow
-    // the head. ResolveBuildProfile has already logged which build was seen.
+    // Camera tracking without the corresponding aim hooks would leave the
+    // tracked transform in gameplay queries, so resolve the complete set first.
     if (ResolveBuildProfile() == nullptr) {
         Logger::Instance().Error(
             "Head tracking is off for this session. No hooks are installed and nothing in the "
@@ -211,10 +206,6 @@ void Mod::SaveToggle(const std::function<void(Config&)>& change) {
     }
 }
 
-// False means the mod must not run at all. Only two things reach that: MinHook
-// failing outright, and the aim hook failing, because head tracking without aim
-// decoupling points the game's own aim wherever the head is looking. Everything
-// else here degrades what is drawn and logs a line.
 bool Mod::InitializeHooks() {
     if (!HookManager::Instance().Initialize()) {
         Logger::Instance().Error("MinHook initialization failed");
@@ -224,6 +215,7 @@ bool Mod::InitializeHooks() {
     if (!InstallCameraHook()) {
         Logger::Instance().Warning("Camera hook failed - head tracking disabled");
         m_cameraHookInstalled = false;
+        return false;
     } else {
         m_cameraHookInstalled = true;
         Logger::Instance().Info("Camera hook installed");
@@ -234,7 +226,7 @@ bool Mod::InitializeHooks() {
     // all frame and the crosshair pick, projectile spawn and interaction ray all
     // follow the head, so the mod is refused rather than run in that state - the
     // same reason an unrecognised build is refused outright. The profile has
-    // already matched by this point, so the only way here is MinHook failing to
+    // already been validated by this point, so the only way here is MinHook failing to
     // patch the prologue.
     if (!InstallAimHook()) {
         Logger::Instance().Error(
@@ -249,9 +241,11 @@ bool Mod::InitializeHooks() {
     }
     if (!InstallStockReticleHook()) {
         Logger::Instance().Error("Stock reticle positioning is unavailable");
+        return false;
     }
     if (!InstallShipReticleHook()) {
         Logger::Instance().Error("Ship aim UI positioning is unavailable");
+        return false;
     }
 
     // MH_EnableHook(MH_ALL_HOOKS) reports the first failure and may have enabled
@@ -265,6 +259,12 @@ bool Mod::InitializeHooks() {
         Logger::Instance().Error(
             "Some hooks could not be enabled, so head tracking is off for this session. "
             "Everything installed has been switched back off.");
+        return false;
+    }
+
+    if (!EnableShipReticleSerializers()) {
+        MH_DisableHook(MH_ALL_HOOKS);
+        Logger::Instance().Error("Ship aim UI initialization failed; head tracking is off for this session");
         return false;
     }
 

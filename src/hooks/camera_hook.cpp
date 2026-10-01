@@ -6,6 +6,7 @@
 #include "game/camera_math.h"
 #include "game/base_fov.h"
 #include "game/build_profile.h"
+#include "game/build_selection.h"
 #include "game/aim_projection.h"
 #include "game/game_state.h"
 #include "game/helmet_light.h"
@@ -291,6 +292,11 @@ HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum) {
     // it; roll turns the picture about the view axis by the same angle at every
     // field of view there is, so it does not.
     pose.zoom = PoseZoomFactor(frustum.right, frustum.top);
+    if (!(pose.zoom > 0.0f)) {
+        pose.haveRotation = false;
+        pose.havePosition = false;
+        return pose;
+    }
     if (pose.zoom != 1.0f) {
         pose.yaw = cameraunlock::camera::ScaleAngleForZoom(pose.yaw, pose.zoom);
         pose.pitch = cameraunlock::camera::ScaleAngleForZoom(pose.pitch, pose.zoom);
@@ -445,9 +451,10 @@ void __fastcall CameraUpdateHook(void* thisCamera) {
     Mod::Instance().LogTrackerConnection();
 
     uintptr_t state = 0;
-    if (SafeRead(reinterpret_cast<uintptr_t>(thisCamera) + kCameraStateOffset, state)) {
-        GameState::SetCameraState(state);
-    }
+    const auto* contracts = RuntimeContracts();
+    const auto stateOffset = contracts ? contracts->members.at("CameraState") : kCameraStateOffset;
+    SafeRead(reinterpret_cast<uintptr_t>(thisCamera) + stateOffset, state);
+    GameState::SetCameraState(state);
 
     if (!ResolveSceneLayout(thisCamera)) return;
 
@@ -551,7 +558,7 @@ bool InstallCameraHook() {
     // through SafeRead: a match found in the last few bytes of the module would
     // otherwise have this read past the end of it.
     uintptr_t updateFunc = 0;
-    if (!SafeRead(vtable + kTesCameraUpdateSlot * kPointerSize, updateFunc)) {
+    if (!SafeRead(vtable + RuntimeSlot("CameraUpdate", kTesCameraUpdateSlot) * kPointerSize, updateFunc)) {
         Logger::Instance().Error("Could not read slot %d of the PlayerCamera vtable at 0x%llX",
                                  kTesCameraUpdateSlot, static_cast<unsigned long long>(vtable));
         return false;

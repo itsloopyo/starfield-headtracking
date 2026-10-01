@@ -14,6 +14,28 @@ endif()
 # Include cameraunlock-core shared library
 add_subdirectory(cameraunlock-core/cpp ${CMAKE_BINARY_DIR}/cameraunlock-core)
 
+set(ZYDIS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ZYDIS_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(ZYDIS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ZYDIS_BUILD_DOXYGEN OFF CACHE BOOL "" FORCE)
+set(ZYDIS_FEATURE_ENCODER OFF CACHE BOOL "" FORCE)
+set(ZYDIS_FEATURE_FORMATTER OFF CACHE BOOL "" FORCE)
+set(ZYDIS_FEATURE_SEGMENT OFF CACHE BOOL "" FORCE)
+set(ZYDIS_FEATURE_KNC OFF CACHE BOOL "" FORCE)
+add_subdirectory(extern/zydis)
+add_library(starfieldht_discovery STATIC
+    src/game/discovery/image.cpp
+    src/game/discovery/instructions.cpp
+    src/game/discovery/rtti.cpp
+    src/game/discovery/contracts.cpp
+    src/game/discovery/native_contracts.cpp
+    src/game/build_selection.cpp
+    src/game/gdk_offsets.cpp
+    src/game/steam_offsets.cpp
+)
+target_include_directories(starfieldht_discovery PUBLIC src cameraunlock-core/cpp/include)
+target_link_libraries(starfieldht_discovery PUBLIC Zydis)
+
 # MinHook sources
 set(MINHOOK_SOURCES
     extern/minhook/src/buffer.c
@@ -43,8 +65,6 @@ set(MOD_SOURCES
     src/hooks/aim_hook.cpp
     src/hooks/weapon_hook.cpp
     src/game/build_profile.cpp
-    src/game/gdk_offsets.cpp
-    src/game/steam_offsets.cpp
     src/game/base_fov.cpp
     src/game/helmet_light.cpp
     src/hooks/input_hook.cpp
@@ -75,7 +95,7 @@ set_target_properties(StarfieldHeadTracking PROPERTIES
 )
 
 # Link cameraunlock core library
-target_link_libraries(StarfieldHeadTracking PRIVATE cameraunlock)
+target_link_libraries(StarfieldHeadTracking PRIVATE cameraunlock starfieldht_discovery)
 
 option(STARFIELDHT_DEV_HOTKEYS "Build the diagnostic hotkeys (developer aid, not for release)" OFF)
 if(STARFIELDHT_DEV_HOTKEYS)
@@ -109,6 +129,9 @@ endif()
 option(STARFIELDHT_BUILD_TESTS "Build the camera behaviour tests" ON)
 if(STARFIELDHT_BUILD_TESTS)
     enable_testing()
+    add_executable(starfieldht_discovery_tests tests/discovery_tests.cpp)
+    target_link_libraries(starfieldht_discovery_tests PRIVATE starfieldht_discovery)
+    add_test(NAME runtime_discovery COMMAND starfieldht_discovery_tests)
     add_executable(starfieldht_lean_tests tests/lean_direction_tests.cpp)
     target_include_directories(starfieldht_lean_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

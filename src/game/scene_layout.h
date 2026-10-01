@@ -5,17 +5,8 @@
 
 namespace StarfieldHT {
 
-// Byte offsets into the engine's scene-graph objects, resolved at runtime from
-// the shapes of the structures themselves rather than pinned per game build.
-//
-// The alternative - a fingerprinted table of offsets per shipped build - would
-// strand every player whose build is not in the table, and the Xbox package's
-// executable is not readable on disk, so there is no way to prepare that table
-// ahead of a patch. Matching on shape instead is re-checked against the live
-// data every launch: a basis must be orthonormal, a frustum must have its near
-// plane in front of its far plane, and the world-to-clip matrix must be
-// reproducible from the world transform and the frustum. When nothing matches,
-// the mod says so and stays dormant.
+// Decoded member offsets are checked against the live camera's type, parent
+// and projection. Exact historical profiles retain their live layout resolver.
 //
 // Transforms are 4x4 row-major and 64 bytes: rows 0..2 are the node's local
 // axes expressed in world space with a 0 in the fourth column, row 3 is the
@@ -36,9 +27,8 @@ struct SceneLayout {
 // inside the first camera update, where it stalled the game's own frame.
 bool InitializeSceneLayout(uintptr_t moduleBase, size_t moduleSize);
 
-// Resolves the layout from a live PlayerCamera. Logs every field it finds and
-// the reason it gave up. Safe to call every frame; the result is cached after
-// the first success.
+// Caches successful validation. A structural failure on the discovered route
+// disables tracking for the session; only identified not-ready states wait.
 bool ResolveSceneLayout(void* playerCamera);
 
 // Valid only after ResolveSceneLayout has returned true.

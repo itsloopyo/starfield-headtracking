@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "scene_layout.h"
+#include "build_selection.h"
+#include "game_state.h"
 
 #include "core/logger.h"
 #include "core/rtti_utils.h"
@@ -15,6 +17,9 @@ namespace {
 using cameraunlock::memory::SafeRead;
 
 SceneLayout g_layout;
+const SceneLayout g_emptyLayout;
+std::atomic<bool> g_layoutReady{false};
+std::mutex g_layoutMutex;
 uintptr_t   g_niCameraVtable = 0;
 int         g_cameraChildIndex = -2;  // -1 = the node slot holds the NiCamera itself
 uintptr_t   g_moduleBase = 0;
@@ -38,7 +43,7 @@ bool ReadPtr(uintptr_t addr, uintptr_t& out) {
 
 bool HasVtable(uintptr_t obj, uintptr_t vtable) {
     uintptr_t v = 0;
-    return LooksLikeObject(obj) && ReadPtr(obj, v) && v == vtable;
+    return obj != 0 && (obj & 7) == 0 && ReadPtr(obj, v) && v == vtable;
 }
 
 bool NearlyEqual(float a, float b, float tol) {
@@ -242,6 +247,7 @@ float ClipMismatch(const NiMatrix44& a, const NiMatrix44& b) {
     for (int r = 0; r < 4; ++r) {
         for (int c = 0; c < 4; ++c) {
             const float d = fabsf(a.entry[r][c] - b.entry[r][c]);
+            if (!IsFinite(d)) return 1e30f;
             if (d > worst) worst = d;
         }
     }
@@ -306,7 +312,9 @@ void LogFloatWindow(const char* what, uintptr_t base, uintptr_t from, uintptr_t 
 
 } // namespace
 
-const SceneLayout& GetSceneLayout() { return g_layout; }
+const SceneLayout& GetSceneLayout() {
+    return g_layoutReady.load(std::memory_order_acquire) ? g_layout : g_emptyLayout;
+}
 
 bool InitializeSceneLayout(uintptr_t moduleBase, size_t moduleSize) {
     g_moduleBase = moduleBase;
@@ -323,8 +331,88 @@ bool InitializeSceneLayout(uintptr_t moduleBase, size_t moduleSize) {
 }
 
 bool ResolveSceneLayout(void* playerCamera) {
-    if (g_layout.valid) return true;
+    if (g_layoutReady.load(std::memory_order_acquire)) return true;
+    const std::lock_guard<std::mutex> lock(g_layoutMutex);
+    if (g_layoutReady.load(std::memory_order_relaxed)) return true;
     if (!playerCamera || g_niCameraVtable == 0) return false;
+
+    if (const auto* contracts = RuntimeContracts()) {
+        static bool rejected = false;
+        static ULONGLONG waitingSince = 0;
+        if (rejected) return false;
+        const auto waitForInitialization = [&] {
+            if (!waitingSince && GameState::IsInGameplay()) waitingSince = GetTickCount64();
+            if (waitingSince && GetTickCount64() - waitingSince >= 30000) {
+                rejected = true;
+                Logger::Instance().Error("Scene layout: camera root or children did not initialize within 30 seconds of gameplay; tracking disabled");
+            }
+            return false;
+        };
+        const auto& fields = contracts->members;
+        uintptr_t root = 0;
+        const auto object = reinterpret_cast<uintptr_t>(playerCamera);
+        if (!HasVtable(object, g_moduleBase + contracts->classes.at(".?AVPlayerCamera@@"))) {
+            rejected = true;
+            Logger::Instance().Error("Scene layout: PlayerCamera ownership changed; tracking disabled");
+            return false;
+        }
+        if (!ReadPtr(object + fields.at("CameraRoot"), root)) {
+            rejected = true;
+            Logger::Instance().Error("Scene layout: camera root is unreadable; tracking disabled");
+            return false;
+        }
+        if (!root) return waitForInitialization();
+        uintptr_t children = 0;
+        uint16_t count = 0;
+        if (!HasVtable(root, g_moduleBase + contracts->classes.at(".?AVNiNode@@"))
+            || !ReadPtr(root + fields.at("NodeChildren"), children)
+            || !SafeRead(root + fields.at("NodeChildCount"), count) || count > 64) {
+            rejected = true;
+            Logger::Instance().Error("Scene layout: invalid camera root ownership or child array; tracking disabled");
+            return false;
+        }
+        if (!children || !count) return waitForInitialization();
+        uintptr_t camera = 0;
+        int childIndex = -1;
+        for (unsigned i = 0; i < count; ++i) {
+            uintptr_t child = 0;
+            if (!ReadPtr(children + i * sizeof(uintptr_t), child)) {
+                rejected = true;
+                break;
+            }
+            if (!HasVtable(child, g_niCameraVtable)) continue;
+            if (camera) { rejected = true; break; }
+            camera = child;
+            childIndex = static_cast<int>(i);
+        }
+        uintptr_t parent = 0;
+        NiMatrix44 local{}, world{}, clip{};
+        NiFrustum frustum{};
+        if (rejected || !camera || !ReadPtr(camera + fields.at("NodeParent"), parent) || parent != root
+            || !SafeRead(camera + fields.at("NodeLocal"), local) || !IsNodeTransform(local)
+            || !SafeRead(camera + fields.at("NodeWorld"), world) || !IsNodeTransform(world)
+            || !SafeRead(camera + fields.at("CameraClip"), clip)
+            || !SafeRead(camera + fields.at("CameraFrustum"), frustum) || !IsFrustum(frustum)) {
+            rejected = true;
+            Logger::Instance().Error("Scene layout: live camera ownership or decoded field contract failed; tracking disabled");
+            return false;
+        }
+        CameraBasis basis{};
+        ReadBasis(world, basis);
+        NiMatrix44 expected{};
+        BuildWorldToClip(basis, frustum, expected);
+        if (ClipMismatch(clip, expected) > kMaxClipError) {
+            rejected = true;
+            Logger::Instance().Error("Scene layout: decoded camera fields disagree with projection; tracking disabled");
+            return false;
+        }
+        g_layout = {true, fields.at("CameraRoot"), fields.at("NodeChildren"), fields.at("NodeParent"),
+                    fields.at("NodeLocal"), fields.at("NodeWorld"), fields.at("CameraClip"), fields.at("CameraFrustum")};
+        g_cameraChildIndex = childIndex;
+        g_layoutReady.store(true, std::memory_order_release);
+        Logger::Instance().Info("Scene layout: decoded fields and unique live camera ownership validated");
+        return true;
+    }
 
     const uintptr_t cam = reinterpret_cast<uintptr_t>(playerCamera);
     uintptr_t rootOffset = 0, childrenOffset = 0, cameraRoot = 0, niCamera = 0;
@@ -466,6 +554,7 @@ bool ResolveSceneLayout(void* playerCamera) {
     g_layout.frustumOffset        = frustumOffset;
     g_layout.valid = true;
     g_cameraChildIndex = childIndex;
+    g_layoutReady.store(true, std::memory_order_release);
 
     Logger::Instance().Info(
         "Scene layout resolved: cameraRoot=+0x%llX children=+0x%llX parent=+0x%llX childIndex=%d "
@@ -489,7 +578,7 @@ bool ResolveSceneLayout(void* playerCamera) {
 }
 
 bool GetSceneGraph(void* playerCamera, uintptr_t& cameraRoot, uintptr_t& niCamera) {
-    if (!g_layout.valid || !playerCamera) return false;
+    if (!g_layoutReady.load(std::memory_order_acquire) || !playerCamera) return false;
     const uintptr_t cam = reinterpret_cast<uintptr_t>(playerCamera);
     uintptr_t root = 0;
     if (!ReadPtr(cam + g_layout.cameraRootOffset, root) || !LooksLikeObject(root)) return false;
@@ -501,6 +590,11 @@ bool GetSceneGraph(void* playerCamera, uintptr_t& cameraRoot, uintptr_t& niCamer
         if (!ReadPtr(slot + g_cameraChildIndex * kPointerSize, camera)) return false;
     }
     if (!HasVtable(camera, g_niCameraVtable)) return false;
+    if (const auto* contracts = RuntimeContracts()) {
+        uintptr_t parent = 0;
+        if (!HasVtable(root, g_moduleBase + contracts->classes.at(".?AVNiNode@@"))
+            || !ReadPtr(camera + g_layout.parentOffset, parent) || parent != root) return false;
+    }
 
     cameraRoot = root;
     niCamera = camera;

@@ -3,6 +3,7 @@
 
 #include "core/constants.h"
 #include "core/logger.h"
+#include "game/build_selection.h"
 
 #include <cameraunlock/memory/pattern_scanner.h>
 #include <cameraunlock/memory/safe_memory.h>
@@ -80,6 +81,14 @@ uintptr_t ScanRunForVtable(uintptr_t moduleBase, uintptr_t runBase, size_t runSi
 // Walked through NextReadableRange rather than straight across SizeOfImage: an
 // image can map a section PAGE_NOACCESS, and a raw read there closes the game.
 uintptr_t FindVtableByRTTI(uintptr_t moduleBase, size_t moduleSize, const char* className) {
+    if (const auto* contracts = RuntimeContracts()) {
+        const auto found = contracts->classes.find(className);
+        if (found == contracts->classes.end()) {
+            Logger::Instance().Error("No validated runtime type for %s", className);
+            return 0;
+        }
+        return moduleBase + found->second;
+    }
     HMODULE gameModule = GetModuleHandleA(GAME_EXE);
 
     void* typeDesc = cameraunlock::memory::FindRTTIDescriptor(gameModule, className);

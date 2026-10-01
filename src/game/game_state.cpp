@@ -2,6 +2,7 @@
 #include "game_state.h"
 #include "core/logger.h"
 #include "core/rtti_utils.h"
+#include "build_selection.h"
 
 #include <cameraunlock/memory/safe_memory.h>
 
@@ -85,9 +86,17 @@ constexpr int kMaxStates = 32;
 StateEntry g_states[kMaxStates] = {};
 int        g_stateCount = 0;
 
-std::atomic<bool> g_cameraStateIsGameplay{true};
+std::atomic<bool> g_cameraStateIsGameplay{false};
 
 bool ClassifyState(uintptr_t vtable) {
+    if (const auto* contracts = RuntimeContracts()) {
+        const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(GAME_EXE));
+        for (const char* name : {".?AVFirstPersonState@@", ".?AVThirdPersonState@@", ".?AVBleedoutCameraState@@",
+                                 ".?AVFlightCameraState@@", ".?AVFurnitureCameraState@@", ".?AVShipActionCameraState@@"}) {
+            if (vtable == base + contracts->classes.at(name)) return true;
+        }
+        return false;
+    }
     for (int i = 0; i < g_stateCount; ++i) {
         if (g_states[i].vtable == vtable) return g_states[i].gameplay;
     }

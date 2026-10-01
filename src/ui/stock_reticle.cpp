@@ -5,6 +5,7 @@
 #include "core/mod.h"
 #include "core/rtti_utils.h"
 #include "game/build_profile.h"
+#include "game/build_selection.h"
 #include "game/game_state.h"
 #include "game/impact_projection.h"
 #include "hooks/camera_hook.h"
@@ -105,19 +106,27 @@ uintptr_t HudHitEvent(uintptr_t sink, uintptr_t data, uintptr_t source) {
 // movie member, and calling straight through slot 49 of whatever is now mapped
 // there transfers control into recycled heap.
 template<class F>
-F Virtual(uintptr_t object, size_t slot) {
+F Virtual(uintptr_t object, const char* method, size_t slot) {
     uintptr_t vtable = 0;
     if (!cameraunlock::memory::SafeRead(object, vtable) || vtable == 0) return nullptr;
+    const auto* contracts = RuntimeContracts();
+    if (contracts) {
+        const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(GAME_EXE));
+        if (vtable != base + contracts->tables.at(method)) return nullptr;
+        slot = contracts->slots.at(method);
+    }
     uintptr_t entry = 0;
     if (!cameraunlock::memory::SafeRead(vtable + slot * sizeof(uintptr_t), entry) || entry == 0) {
         return nullptr;
     }
+    if (contracts && entry != reinterpret_cast<uintptr_t>(GetModuleHandleA(GAME_EXE))
+                               + contracts->methods.at(method)) return nullptr;
     return reinterpret_cast<F>(entry);
 }
 
 bool GetNumber(uintptr_t root, const char* path, double& out) {
     using GetVariable = bool (*)(uintptr_t, GfxNumber*, const char*);
-    const GetVariable getVariable = Virtual<GetVariable>(root, kSlotGetVariable);
+    const GetVariable getVariable = Virtual<GetVariable>(root, "GetVariable", kSlotGetVariable);
     if (!getVariable) return false;
 
     GfxNumber value;
@@ -133,7 +142,7 @@ bool GetNumber(uintptr_t root, const char* path, double& out) {
 
 bool SetNumber(uintptr_t root, const char* path, double number) {
     using SetVariable = bool (*)(uintptr_t, const char*, const GfxNumber*, uint32_t);
-    const SetVariable setVariable = Virtual<SetVariable>(root, kSlotSetVariable);
+    const SetVariable setVariable = Virtual<SetVariable>(root, "SetVariable", kSlotSetVariable);
     if (!setVariable) return false;
 
     GfxNumber value;
@@ -181,7 +190,7 @@ void LogReticleGeometry(const CameraFrame& frame, bool projected, float distance
 bool ReticleOffset(uintptr_t movie, uintptr_t root, const CameraFrame& frame,
                    double& outX, double& outY) {
     using GetRect = MovieRect* (*)(uintptr_t, MovieRect*);
-    const GetRect getRect = Virtual<GetRect>(movie, kSlotGetVisibleRect);
+    const GetRect getRect = Virtual<GetRect>(movie, "MovieRect", kSlotGetVisibleRect);
     if (!getRect) return false;
     MovieRect rect{};
     getRect(movie, &rect);
@@ -307,7 +316,7 @@ void PositionHitMarker(uintptr_t menu) {
     CameraFrame frame;
     if (hasImpact && Mod::Instance().IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(frame)) {
         using GetRect = MovieRect* (*)(uintptr_t, MovieRect*);
-        const auto getRect = Virtual<GetRect>(movie, kSlotGetVisibleRect);
+        const auto getRect = Virtual<GetRect>(movie, "MovieRect", kSlotGetVisibleRect);
         MovieRect rect{};
         double scaleX = 0, scaleY = 0;
         if (!getRect || !GetNumber(root, "root1.scaleX", scaleX)
@@ -358,15 +367,18 @@ using SerializeHudFloat = void (*)(uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 SerializeHudFloat g_serializeFloatIndex = nullptr;
 SerializeHudFloat g_serializeFloatName = nullptr;
 uintptr_t g_stickDataVtable = 0;
-constexpr uintptr_t kStickAimXOffset = 0x188;
-constexpr uintptr_t kStickAimYOffset = 0x1a8;
+uintptr_t g_floatVtable = 0;
+uintptr_t g_stickAimXOffset = 0x188;
+uintptr_t g_stickAimYOffset = 0x1a8;
+uintptr_t g_floatOwnerOffset = 8;
+uintptr_t g_floatValueOffset = 0x18;
 
 void SerializeShipHudFloat(SerializeHudFloat original, uintptr_t object, uintptr_t context,
                            uintptr_t destination, uintptr_t key) {
     uintptr_t owner = 0, ownerVtable = 0;
-    const bool readable = cameraunlock::memory::SafeRead(object + 8, owner);
-    const bool aimX = readable && object - owner == kStickAimXOffset;
-    const bool aimY = readable && object - owner == kStickAimYOffset;
+    const bool readable = cameraunlock::memory::SafeRead(object + g_floatOwnerOffset, owner);
+    const bool aimX = readable && object >= owner && object - owner == g_stickAimXOffset;
+    const bool aimY = readable && object >= owner && object - owner == g_stickAimYOffset;
     if ((aimX || aimY) && cameraunlock::memory::SafeRead(owner, ownerVtable)
         && ownerVtable == g_stickDataVtable) {
         const Mod& mod = Mod::Instance();
@@ -383,9 +395,9 @@ void SerializeShipHudFloat(SerializeHudFloat original, uintptr_t object, uintptr
             alignas(8) unsigned char snapshot[0x20];
             if (cameraunlock::memory::SafeRead(object, snapshot)) {
                 float value = 0;
-                memcpy(&value, snapshot + 0x18, sizeof(value));
+                memcpy(&value, snapshot + g_floatValueOffset, sizeof(value));
                 value += aimX ? -nx * 0.5f : ny * 0.5f;
-                memcpy(snapshot + 0x18, &value, sizeof(value));
+                memcpy(snapshot + g_floatValueOffset, &value, sizeof(value));
                 original(reinterpret_cast<uintptr_t>(snapshot), context, destination, key);
                 return;
             }
@@ -439,7 +451,7 @@ bool ReadShipReticlePosition(uintptr_t movie, const CameraFrame& frame, ShipReti
         sy *= scale;
     }
     using GetRect = MovieRect* (*)(uintptr_t, MovieRect*);
-    const GetRect getRect = Virtual<GetRect>(movie, kSlotGetVisibleRect);
+    const GetRect getRect = Virtual<GetRect>(movie, "MovieRect", kSlotGetVisibleRect);
     if (!getRect) return false;
     MovieRect rect{};
     getRect(movie, &rect);
@@ -566,8 +578,8 @@ bool InstallShipReticleHook() {
     const uintptr_t movieVtable = FindVtableByRTTI(base, moduleSize, ".?AVMovieImpl@GFx@Scaleform@@");
     uintptr_t capture = 0;
     if (!shipVtable || !movieVtable
-        || !cameraunlock::memory::SafeRead(shipVtable + 11 * sizeof(uintptr_t), shipUpdate)
-        || !cameraunlock::memory::SafeRead(movieVtable + 25 * sizeof(uintptr_t), capture)
+        || !cameraunlock::memory::SafeRead(shipVtable + RuntimeSlot("ShipHudUpdate", 11) * sizeof(uintptr_t), shipUpdate)
+        || !cameraunlock::memory::SafeRead(movieVtable + RuntimeSlot("MovieCapture", 25) * sizeof(uintptr_t), capture)
         || shipUpdate < base || shipUpdate - base >= moduleSize
         || capture < base || capture - base >= moduleSize) {
         Logger::Instance().Error("Ship aim UI: menu update or movie capture is unavailable");
@@ -591,20 +603,41 @@ bool InstallShipReticleHook() {
         Logger::Instance().Error("Ship lock UI: float serializer or stick data type is unavailable");
         return false;
     }
-    auto slots = reinterpret_cast<SerializeHudFloat*>(floatVtable + sizeof(uintptr_t));
-    g_serializeFloatIndex = slots[0];
-    g_serializeFloatName = slots[1];
+    const auto indexSlot = RuntimeSlot("FloatIndex", 1);
+    const auto nameSlot = RuntimeSlot("FloatName", 2);
+    auto slots = reinterpret_cast<SerializeHudFloat*>(floatVtable);
+    g_serializeFloatIndex = slots[indexSlot];
+    g_serializeFloatName = slots[nameSlot];
+    g_floatVtable = floatVtable;
+    if (const auto* contracts = RuntimeContracts()) {
+        const auto& fields = contracts->members;
+        g_stickAimXOffset = fields.at("StickEmbeddedData") + fields.at("StickAimX");
+        g_stickAimYOffset = fields.at("StickEmbeddedData") + fields.at("StickAimY");
+        g_floatOwnerOffset = fields.at("FloatOwner");
+        g_floatValueOffset = fields.at("FloatValue");
+    }
+    return true;
+}
+
+bool EnableShipReticleSerializers() {
+    const auto indexSlot = RuntimeSlot("FloatIndex", 1);
+    const auto nameSlot = RuntimeSlot("FloatName", 2);
+    auto slots = reinterpret_cast<SerializeHudFloat*>(g_floatVtable);
     // These serializers start with VEX instructions unsupported by MinHook.
     // Swap their virtual slots; each wrapper only reads the snapshot's float.
     DWORD oldProtection = 0;
-    if (!VirtualProtect(slots, 2 * sizeof(*slots), PAGE_READWRITE, &oldProtection)) {
+    const auto firstSlot = std::min(indexSlot, nameSlot);
+    const auto span = (std::max(indexSlot, nameSlot) - firstSlot + 1) * sizeof(*slots);
+    if (!VirtualProtect(slots + firstSlot, span, PAGE_READWRITE, &oldProtection)) {
         Logger::Instance().Error("Ship lock UI: cannot protect serializer slots (%lu)", GetLastError());
         return false;
     }
-    slots[0] = &SerializeShipHudFloatIndex;
-    slots[1] = &SerializeShipHudFloatName;
+    slots[indexSlot] = &SerializeShipHudFloatIndex;
+    slots[nameSlot] = &SerializeShipHudFloatName;
     DWORD unusedProtection = 0;
-    if (!VirtualProtect(slots, 2 * sizeof(*slots), oldProtection, &unusedProtection)) {
+    if (!VirtualProtect(slots + firstSlot, span, oldProtection, &unusedProtection)) {
+        slots[indexSlot] = g_serializeFloatIndex;
+        slots[nameSlot] = g_serializeFloatName;
         Logger::Instance().Error("Ship lock UI: cannot restore serializer protection (%lu)", GetLastError());
         return false;
     }

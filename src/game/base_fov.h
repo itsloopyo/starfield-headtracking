@@ -18,8 +18,9 @@ namespace StarfieldHT {
 // ordinary play and leaves ordinary play untouched.
 //
 // Fed the live frustum, which is tan(HFOV/2) and tan(VFOV/2) at a near plane of
-// 1. Returns 1.0 - no compensation rather than a guessed one - when the
-// reference cannot be read, and says so in the log once.
+// 1. A discovered build returns 0 when the reference cannot be validated, so
+// its caller suppresses tracking. Exact historical profiles retain 1.0 as
+// their uncompensated fallback.
 float PoseZoomFactor(float frustumRight, float frustumTop);
 
 } // namespace StarfieldHT

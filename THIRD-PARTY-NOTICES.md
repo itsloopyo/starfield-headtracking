@@ -20,6 +20,8 @@ file is added.
 | injector | `f7fd18f` (inside Ultimate ASI Loader v9.7.2) | Zlib | Compiled into the vendored loader DLL |
 | miniz | 3.0.0 (inside Ultimate ASI Loader v9.7.2) | MIT | Compiled into the vendored loader DLL |
 | MinHook | v1.3.4 (`c3fcafd`), modified | BSD-2-Clause | Compiled into `StarfieldHeadTracking.asi` |
+| Zydis | v4.1.1 | MIT | Compiled into `StarfieldHeadTracking.asi` |
+| Zycore | `0b2432ced0884fd152b471d97ecf0258ff4d859f` | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | inih | r55, modified | BSD-3-Clause | Compiled into `StarfieldHeadTracking.asi` |
 | cameraunlock-core | 88a20e7789fb5ad907ae06136bc01184edbf4b21 | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | OpenTrack | n/a | ISC | Not bundled; UDP protocol interoperability only |
@@ -390,18 +392,18 @@ obligation here. It is credited because the wire format is its work.
 
 Nothing of Bethesda's is bundled, linked or compiled into
 `StarfieldHeadTracking.asi`, and no part of the game is redistributed. The mod
-does hold a short list of numbers describing the shape of the running game's own
-code and data: the addresses of the function the renderer projects through, of
-the weapon render pass, the player's ADS state, and the HUD's own update; which slot
-of the camera's function table is its per-frame update; where a scene-graph node
-keeps its transforms and where the camera keeps its frustum; and the size and
-member offsets of a handful of small structures the mod has to read. Most of the
-scene-graph offsets are not written down at all - they are matched against the
-live data every launch and held only in memory.
+does hold numeric compatibility profiles and decoded instruction contracts for
+camera, projection, weapon, ship targeting and HUD interfaces. These describe
+function structure, operand widths, type ownership, call relationships and
+the fields the mod reads or writes. Discovery resolves addresses and virtual
+slots from the running image and checks scene-graph ownership against live
+objects before applying tracking. The historical profiles remain available
+only for their exact executable fingerprints.
 
 The camera and render-pass layouts and function addresses were measured in a
-legitimately purchased copy of the game. They are recorded as numeric constants
-inside this project's own namespaces.
+legitimately purchased copy of the game. The contracts store numeric instruction
+fingerprints and structural relationships, without game function bytes or
+reconstructed game implementations.
 
 The class names the mod looks up - `PlayerCamera`, `NiCamera`, the HUD's own
 menu classes, and whatever the running camera state calls itself - are read out
@@ -445,16 +447,9 @@ see that stated rather than have to go and find it.
   this repository, compiled into `StarfieldHeadTracking.asi`, or shipped in any
   release ZIP. Nothing here links against it.
 
-What was taken is a handful of integers describing the shape of Bethesda's
-compiled structures. Those integers are measurements of a third party's binary,
-not CommonLibSF's own expression, and the same values fall out of reading the
-game directly, which is how they were arrived at and then re-checked here. On
-that basis this project carries no obligation under GPL-3.0, and none is
-claimed to have been discharged: there is no derived work to license, because
-nothing of theirs was taken into the build.
-
-The credit is owed regardless of whether the licence bites. That project's work
-saved time, and saying so is the point of this file.
+The referenced integers describe structure sizes and member locations. This
+notice records that provenance and the absence of CommonLibSF code from the
+build; it does not establish legal clearance for the mod.
 
 ---
 
@@ -491,3 +486,64 @@ legitimately purchased copy of the game. The engine offsets and function
 addresses the source refers to are measurements of the running game, taken on a
 legitimately purchased copy and recorded as numbers and nothing else. No game
 source of any kind is stored in this repository.
+
+## Zydis
+
+Statically linked for bounded AMD64 instruction decoding. Upstream: https://github.com/zyantific/zydis. Commit: `a2278f1d254e492f6a6b39f6cb5d1f5d515659dc`.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2014-2024 Florian Bernd
+Copyright (c) 2014-2024 Joel Höner
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+
+## Zycore
+
+Statically linked for bounded AMD64 instruction decoding. Upstream: https://github.com/zyantific/zycore-c. Commit: `0b2432ced0884fd152b471d97ecf0258ff4d859f`.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2018-2024 Florian Bernd
+Copyright (c) 2018-2024 Joel Höner
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```

@@ -1,66 +1,75 @@
 #include "pch.h"
-#include "build_profile.h"
-
+#include "build_selection.h"
 #include "core/logger.h"
+#include <cameraunlock/memory/pattern_scanner.h>
 
 namespace StarfieldHT {
-
 namespace {
-
-// Newest first: the top entry is the comparison when no known timestamp matches.
-const BuildProfile* const kKnownProfiles[] = {
-    &kSteamProfile_20251129,
-    &kGdkProfile_20251129,
-};
-
-const BuildProfile* MatchRunningBuild() {
-    HMODULE gameModule = GetModuleHandleA(GAME_EXE);
-    if (!gameModule) return nullptr;
-
-    cameraunlock::memory::PeFingerprint running{};
-    if (!cameraunlock::memory::ReadPeFingerprint(gameModule, running)) {
-        Logger::Instance().Error("Could not read the game's PE header - aim decoupling is off");
-        return nullptr;
+discovery::Image SnapshotImage(HMODULE module) {
+    uintptr_t base = 0;
+    size_t size = 0;
+    discovery::Require(cameraunlock::memory::GetModuleRange(module, base, size)
+                       && size > 0 && size <= 512u * 1024 * 1024,
+                       "Could not determine bounded game image");
+    std::vector<uint8_t> bytes(size);
+    uintptr_t cursor = base, run = 0;
+    size_t length = 0;
+    while (cameraunlock::memory::NextReadableRange(cursor, base + size, run, length)) {
+        discovery::Require(run >= base && run - base <= size && length <= size - (run - base),
+                           "Readable mapping exceeds game image");
+        SIZE_T copied = 0;
+        discovery::Require(ReadProcessMemory(GetCurrentProcess(), reinterpret_cast<const void*>(run),
+                           bytes.data() + (run - base), length, &copied) && copied == length,
+                           "Game image changed protection during discovery");
     }
-
-    for (const BuildProfile* profile : kKnownProfiles) {
-        if (profile->fingerprint.Matches(running)) {
-            Logger::Instance().Info("Build profile %s matched", profile->name);
-            return profile;
-        }
-    }
-
-    const BuildProfile* primary = kKnownProfiles[0];
-    for (const BuildProfile* profile : kKnownProfiles) {
-        if (profile->fingerprint.TimeDateStamp == running.TimeDateStamp) {
-            primary = profile;
-            break;
-        }
-    }
-    const auto mismatch = cameraunlock::memory::ClassifyMismatch(running, primary->fingerprint);
-    const char* reason =
-        mismatch == cameraunlock::memory::FingerprintMismatch::Newer
-            ? "this game build is newer than the mod knows about - check the releases page for an update"
-        : mismatch == cameraunlock::memory::FingerprintMismatch::Older
-            ? "this game build is older than the mod knows about - let the store finish updating"
-            : "this executable does not match any build the mod knows about";
-    Logger::Instance().Warning(
-        "No build profile for the running game (TimeDateStamp 0x%08X, SizeOfImage 0x%08X, "
-        "CheckSum 0x%08X): %s. The mod stays dormant - it installs no hooks and modifies "
-        "nothing, so the game runs exactly as it would without it.",
-        running.TimeDateStamp, running.SizeOfImage, running.CheckSum, reason);
-    return nullptr;
+    discovery::Image image(std::move(bytes));
+    image.base = base;
+    return image;
 }
 
-} // namespace
-
-// The match runs once. A function-local static is what makes that safe: the
-// hook installs resolve on the init thread while the camera and HUD hooks
-// resolve on their own, and a hand-rolled done flag is a data race between
-// them that costs a duplicated fingerprint report at best.
-const BuildProfile* ResolveBuildProfile() {
-    static const BuildProfile* const s_resolved = MatchRunningBuild();
-    return s_resolved;
+BuildSelection MatchRunningBuild() {
+    const auto module = GetModuleHandleA(GAME_EXE);
+    cameraunlock::memory::PeFingerprint fingerprint{};
+    if (!module || !cameraunlock::memory::ReadPeFingerprint(module, fingerprint)) {
+        Logger::Instance().Error("Could not read the game image fingerprint; head tracking remains dormant");
+        return {};
+    }
+    Logger::Instance().Info("Validating native camera dependencies for image %08X/%08X/%08X",
+                            fingerprint.TimeDateStamp, fingerprint.SizeOfImage, fingerprint.CheckSum);
+    for (const auto* profile : {&kSteamProfile_20251129, &kGdkProfile_20251129}) {
+        Logger::Instance().Info("Compatibility profile %s: %08X/%08X/%08X (%s)", profile->name,
+                                profile->fingerprint.TimeDateStamp, profile->fingerprint.SizeOfImage,
+                                profile->fingerprint.CheckSum, profile->fingerprint.Matches(fingerprint) ? "exact" : "different");
+    }
+    auto selection = SelectBuild(fingerprint, [&] { return DiscoverBuild(SnapshotImage(module)); });
+    if (selection.discovered) Logger::Instance().Info("%s", selection.diagnostic.c_str());
+    else Logger::Instance().Warning("%s", selection.diagnostic.c_str());
+    if (selection.exact) {
+        Logger::Instance().Info("Using complete exact compatibility profile %s", selection.exact->name);
+    }
+    if (selection.discovered) {
+        const auto& contracts = selection.discovered->contracts;
+        for (const auto& [name, value] : contracts.methods) Logger::Instance().Info("Discovery method %s RVA 0x%X", name.c_str(), value);
+        for (const auto& [name, value] : contracts.data) Logger::Instance().Info("Discovery global %s RVA 0x%X", name.c_str(), value);
+        for (const auto& [name, value] : contracts.members) Logger::Instance().Info("Discovery field %s +0x%X", name.c_str(), value);
+        for (const auto& [name, value] : contracts.slots) Logger::Instance().Info("Discovery virtual slot %s %u", name.c_str(), value);
+    }
+    return selection;
 }
 
-} // namespace StarfieldHT
+const BuildSelection& Selection() {
+    static const BuildSelection selected = MatchRunningBuild();
+    return selected;
+}
+}
+
+const BuildProfile* ResolveBuildProfile() { return Selection().Profile(); }
+const discovery::ResolvedContracts* RuntimeContracts() {
+    const auto& selection = Selection();
+    return selection.discovered ? &selection.discovered->contracts : nullptr;
+}
+uintptr_t RuntimeSlot(const char* method, uintptr_t exactProfileSlot) {
+    const auto* contracts = RuntimeContracts();
+    return contracts ? contracts->slots.at(method) : exactProfileSlot;
+}
+}

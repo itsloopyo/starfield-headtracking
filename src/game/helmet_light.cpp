@@ -3,6 +3,7 @@
 
 #include "core/logger.h"
 #include "game/build_profile.h"
+#include "game/build_selection.h"
 #include "game/head_attached.h"
 #include "game/scene_layout.h"
 
@@ -35,8 +36,16 @@ bool IsObject(uintptr_t p) {
 bool NameIs(uintptr_t node, const char* name, size_t size) {
     uintptr_t entry = 0;
     char text[16] = {};
-    return size <= sizeof(text) && SafeRead(node + kNameOffset, entry) && IsObject(entry)
-        && SafeRead(entry + kNameTextOffset, text) && std::memcmp(text, name, size) == 0;
+    const auto* contracts = RuntimeContracts();
+    const auto nameOffset = contracts ? contracts->members.at("NodeName") : kNameOffset;
+    const auto textOffset = contracts ? contracts->members.at("NameCharacters") : kNameTextOffset;
+    if (contracts) {
+        uintptr_t table = 0;
+        const auto base = reinterpret_cast<uintptr_t>(GetModuleHandleA(GAME_EXE));
+        if (!SafeRead(node, table) || table != base + contracts->classes.at(".?AVNiNode@@")) return false;
+    }
+    return size <= sizeof(text) && SafeRead(node + nameOffset, entry) && IsObject(entry)
+        && SafeRead(entry + textOffset, text) && std::memcmp(text, name, size) == 0;
 }
 
 bool ParentIs(uintptr_t node, uintptr_t parent) {
@@ -69,6 +78,23 @@ uintptr_t FindAttachNode(uintptr_t bone) {
     const SceneLayout& layout = GetSceneLayout();
     uintptr_t children = 0;
     uint16_t counts[3] = {};
+    if (const auto* contracts = RuntimeContracts()) {
+        uint16_t count = 0;
+        if (!SafeRead(bone + layout.childrenDataOffset, children) || !IsObject(children)
+            || !SafeRead(bone + contracts->members.at("NodeChildCount"), count) || count > kMaxBoneChildren) return 0;
+        uintptr_t match = 0;
+        for (uint16_t i = 0; i < count; ++i) {
+            uintptr_t child = 0;
+            if (!SafeRead(children + i * sizeof(uintptr_t), child)) return 0;
+            if (!ParentIs(child, bone) || !NameIs(child, kAttachName, sizeof(kAttachName))) continue;
+            if (match) {
+                Logger::Instance().Error("Helmet light: multiple owned attachment nodes; light tracking suppressed");
+                return 0;
+            }
+            match = child;
+        }
+        return match;
+    }
     if (!SafeRead(bone + layout.childrenDataOffset, children) || !IsObject(children)
         || !SafeRead(bone + layout.childrenDataOffset + kChildCountsOffset, counts)) return 0;
     uint16_t count = counts[0];
@@ -121,6 +147,10 @@ uintptr_t CurrentAttachNode() {
 } // namespace
 
 void TrackHelmetLight(const CameraBasis& clean, const CameraBasis& drawn, float turnScale) {
+    if (turnScale == 0.0f) {
+        ReleaseHelmetLight();
+        return;
+    }
     const SceneLayout& layout = GetSceneLayout();
     const uintptr_t node = CurrentAttachNode();
     if (node == 0) return;

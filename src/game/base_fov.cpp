@@ -3,6 +3,7 @@
 
 #include "core/logger.h"
 #include "game/build_profile.h"
+#include "game/build_selection.h"
 
 #include <cameraunlock/camera/zoom_compensation.h>
 #include <cameraunlock/memory/pattern_scanner.h>
@@ -36,6 +37,11 @@ constexpr float kMaxPlausibleFov = 170.0f;
 
 uintptr_t g_setting = 0;
 
+uintptr_t SettingMember(const char* name, uintptr_t legacy) {
+    const auto* contracts = RuntimeContracts();
+    return contracts ? contracts->members.at(name) : legacy;
+}
+
 bool NameMatches(uintptr_t stringAddress, uintptr_t moduleBase, uintptr_t moduleEnd) {
     // The whole comparison has to fit inside the module, not just its first
     // byte: a name pointer landing on the last few bytes of the image would
@@ -56,6 +62,17 @@ bool NameMatches(uintptr_t stringAddress, uintptr_t moduleBase, uintptr_t module
 // is running.
 bool BindSetting() {
     if (g_setting != 0) return true;
+    static bool rejected = false;
+    static const ULONGLONG firstAttempt = GetTickCount64();
+    if (rejected) return false;
+    const bool discovered = RuntimeContracts() != nullptr;
+    const auto reject = [&](const char* reason) {
+        if (discovered) {
+            rejected = true;
+            Logger::Instance().Error("Base FOV validation failed: %s; tracking disabled", reason);
+        }
+        return false;
+    };
 
     const BuildProfile* profile = ResolveBuildProfile();
     if (profile == nullptr) return false;
@@ -69,8 +86,12 @@ bool BindSetting() {
 
     const uintptr_t candidate = moduleBase + profile->baseFovSettingRva;
     uintptr_t namePointer = 0;
-    if (!SafeRead(candidate + kSettingNameOffset, namePointer)) return false;
-    if (!NameMatches(namePointer, moduleBase, moduleBase + moduleSize)) return false;
+    if (!SafeRead(candidate + SettingMember("SettingName", kSettingNameOffset), namePointer)) return reject("unreadable name member");
+    if (discovered && namePointer == 0) {
+        if (GetTickCount64() - firstAttempt >= 30000) return reject("setting initialization timed out after 30 seconds");
+        return false;
+    }
+    if (!NameMatches(namePointer, moduleBase, moduleBase + moduleSize)) return reject("setting name disagrees with native registration");
 
     g_setting = candidate;
     return true;
@@ -82,7 +103,7 @@ bool BindSetting() {
 float BaseTanHalfVertical() {
     if (!BindSetting()) return 0.0f;
     float degrees = 0.0f;
-    if (!SafeRead(g_setting + kSettingValueOffset, degrees)) return 0.0f;
+    if (!SafeRead(g_setting + SettingMember("SettingValue", kSettingValueOffset), degrees)) return 0.0f;
     if (!(degrees >= kMinPlausibleFov && degrees <= kMaxPlausibleFov)) return 0.0f;
     return tanf(0.5f * degrees * DEG_TO_RAD) / kReferenceAspect;
 }
@@ -104,6 +125,14 @@ void ReportOnce(float baseTop, float frustumRight, float frustumTop, float facto
     if (s_reported) return;
 
     if (baseTop <= 0.0f) {
+        if (RuntimeContracts()) {
+            static bool reported = false;
+            if (!reported) {
+                reported = true;
+                Logger::Instance().Warning("Tracking suppressed: validated base FOV setting is not readable or initialized");
+            }
+            return;
+        }
         static std::atomic<uint64_t> s_failures{0};
         const uint64_t n = s_failures.fetch_add(1, std::memory_order_relaxed) + 1;
         if ((n & (n - 1)) != 0) return;
@@ -118,7 +147,7 @@ void ReportOnce(float baseTop, float frustumRight, float frustumTop, float facto
     s_reported = true;
 
     float degrees = 0.0f;
-    SafeRead(g_setting + kSettingValueOffset, degrees);
+    SafeRead(g_setting + SettingMember("SettingValue", kSettingValueOffset), degrees);
     Logger::Instance().Info(
         "Zoom compensation: base FOV %.2f deg horizontal at 16:9 is tan(VFOV/2) %.4f, "
         "live frustum r=%.4f t=%.4f (aspect %.3f), factor %.4f",
@@ -132,7 +161,7 @@ float PoseZoomFactor(float frustumRight, float frustumTop) {
     const float baseTop = BaseTanHalfVertical();
     if (baseTop <= 0.0f || !(frustumTop > 0.0f)) {
         ReportOnce(baseTop, frustumRight, frustumTop, 1.0f);
-        return 1.0f;
+        return RuntimeContracts() ? 0.0f : 1.0f;
     }
 
     const float factor = cameraunlock::camera::FovZoomFactor(frustumTop, baseTop);

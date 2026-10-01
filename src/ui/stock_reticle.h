@@ -3,4 +3,5 @@
 namespace StarfieldHT {
 bool InstallStockReticleHook();
 bool InstallShipReticleHook();
+bool EnableShipReticleSerializers();
 }
