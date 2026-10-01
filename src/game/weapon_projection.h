@@ -1,6 +1,7 @@
 #pragma once
 
 #include "camera_math.h"
+#include "aim_projection.h"
 
 #include <cameraunlock/ads/ads_fade.h>
 
@@ -44,6 +45,29 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
     // world and the head moves around it. cleanEyeShare is 1 in sights locked
     // and 0 in true free look, and between the two while the toggle slides.
     for (int i = 0; i < 3; ++i) eye[i] = drawn.e[i] + (clean.e[i] - drawn.e[i]) * cleanEyeShare;
+}
+
+inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weaponRight, float weaponTop,
+                           float cleanEyeShare, NiMatrix44& view, NiMatrix44& inverseView) {
+    if (cleanEyeShare == 0.0f) return true;
+    float aimX = 0, aimY = 0;
+    const float depth = Dot3(frame.clean.f, frame.drawn.f);
+    if (!std::isfinite(distance) || depth <= 0.01f
+        || !ProjectAimAtDistance(frame, distance, aimX, aimY)) return false;
+    const float directionX = Dot3(frame.clean.f, frame.drawn.r) / depth / frame.frustumRight;
+    const float directionY = Dot3(frame.clean.f, frame.drawn.u) / depth / frame.frustumTop;
+    const float shiftX = (aimX - directionX) * weaponRight * cleanEyeShare;
+    const float shiftY = (aimY - directionY) * weaponTop * cleanEyeShare;
+    if (!std::isfinite(shiftX) || !std::isfinite(shiftY)) return false;
+
+    // Drawing the gun from the clean eye removes near-weapon parallax. Restore
+    // only the target's screen displacement so locked sights still mark the aim.
+    for (int i = 0; i < 4; ++i) {
+        view.entry[i][0] += shiftX * view.entry[i][2];
+        view.entry[i][1] += shiftY * view.entry[i][2];
+        inverseView.entry[2][i] -= shiftX * inverseView.entry[0][i] + shiftY * inverseView.entry[1][i];
+    }
+    return true;
 }
 
 // The toggle moves the weapon's eye by the whole lean, so it rides AdsFade

@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <initializer_list>
 #include "game/weapon_projection.h"
+#include "game/aim_projection.h"
 
 using namespace StarfieldHT;
 
@@ -88,6 +89,61 @@ int main() {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    for (const float zoom : {1.0f, 0.7f}) {
+        for (const float distance : {2.0f, 20.0f, 200.0f}) {
+            CameraFrame frame{};
+            frame.niCamera = 1;
+            frame.clean = clean;
+            frame.drawn = clean;
+            RotateBasis(frame.drawn, up, 0.25f);
+            RotateBasis(frame.drawn, frame.drawn.f, 0.15f);
+            for (int i = 0; i < 3; ++i)
+                frame.drawn.e[i] += 0.06f * clean.r[i] + 0.07f * clean.u[i] - 0.02f * clean.f[i];
+            frame.frustumRight = 1.8f * zoom;
+            frame.frustumTop = 0.5f * zoom;
+            const float weaponRight = 0.8f, weaponTop = 0.4f;
+            float eye[3];
+            NiMatrix44 view{}, inverse{};
+            CompensateWeaponProjection(clean, frame.drawn,
+                frame.frustumRight / weaponRight, frame.frustumTop / weaponTop, 1.0f, eye, view, inverse);
+            if (!AlignWeaponAim(frame, distance, weaponRight, weaponTop, 1.0f, view, inverse)) {
+                std::printf("FAIL: finite target alignment rejected\n");
+                ++failures;
+            }
+            const Mat3 identity = Mul(RotationOf(view), RotationOf(inverse));
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                    Near(identity.m[i][j], i == j ? 1.0f : 0.0f, "aligned weapon inverse");
+            float sight[3], target[3];
+            for (int i = 0; i < 3; ++i) {
+                sight[i] = clean.e[i] + 0.35f * clean.f[i] - eye[i];
+                target[i] = clean.e[i] + distance * clean.f[i] - frame.drawn.e[i];
+            }
+            float projected[3];
+            MulRowVec(sight, RotationOf(view), projected);
+            const float targetDepth = Dot3(target, frame.drawn.f);
+            Near(projected[0] / projected[2] / weaponRight,
+                Dot3(target, frame.drawn.r) / targetDepth / frame.frustumRight,
+                "locked ADS sight follows finite-distance horizontal aim under lean");
+            Near(projected[1] / projected[2] / weaponTop,
+                Dot3(target, frame.drawn.u) / targetDepth / frame.frustumTop,
+                "locked ADS sight follows finite-distance vertical aim under lean");
+            const auto unchangedView = view;
+            const auto unchangedInverse = inverse;
+            if (AlignWeaponAim(frame, -1.0f, weaponRight, weaponTop, 1.0f, view, inverse)) {
+                std::printf("FAIL: invalid target depth accepted\n");
+                ++failures;
+            }
+            AlignWeaponAim(frame, distance, weaponRight, weaponTop, 0.0f, view, inverse);
+            for (int i = 0; i < 4; ++i) {
+                for (int j = 0; j < 4; ++j) {
+                    Near(view.entry[i][j], unchangedView.entry[i][j], "rejection and free look leave view unchanged");
+                    Near(inverse.entry[i][j], unchangedInverse.entry[i][j], "rejection and free look leave inverse unchanged");
                 }
             }
         }

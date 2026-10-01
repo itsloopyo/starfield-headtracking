@@ -150,6 +150,22 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsTrueFreeLook(), NowMs());
             CompensateWeaponProjection(frame.clean, drawn, worldRight / frustum[1], worldTop / frustum[2],
                                       cleanEyeShare, adjusted, view, inverse);
+            if (cleanEyeShare > 0.0f) {
+                CameraFrame aimFrame = frame;
+                aimFrame.drawn = drawn;
+                aimFrame.frustumRight = worldRight;
+                aimFrame.frustumTop = worldTop;
+                float aimX = 0, aimY = 0, distance = 0;
+                const bool aligned = ProjectPlayerAim(aimFrame, aimX, aimY, &distance)
+                    && AlignWeaponAim(aimFrame, distance, frustum[1], frustum[2], cleanEyeShare, view, inverse);
+                static std::atomic<unsigned long long> lastLog{0};
+                const auto now = NowMs();
+                if (now - lastLog.load(std::memory_order_relaxed) >= 1000) {
+                    lastLog.store(now, std::memory_order_relaxed);
+                    Logger::Instance().Info("weapon aim: aligned=%d distance=%.3f target(%+.4f,%+.4f) cleanEyeShare=%.3f world(%.4f,%.4f) weapon(%.4f,%.4f)",
+                        aligned, distance, aimX, aimY, cleanEyeShare, worldRight, worldTop, frustum[1], frustum[2]);
+                }
+            }
             std::memcpy(adjusted + kRenderViewFloat, &view, sizeof(view));
             std::memcpy(adjusted + kRenderInverseFloat, &inverse, sizeof(inverse));
             g_original(previous, reset, adjusted, frustum, ortho, jitter, pass, output);
