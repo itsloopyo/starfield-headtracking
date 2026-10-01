@@ -160,10 +160,9 @@ you are looking at. Leaning carries the light with your eye.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `LightFollowsHead` | `true` | Point the light where you are looking. `false` leaves it on your aim |
 | `LightMultiplier` | `1.5` | How far it turns relative to your head. `1.0` matches the view, `0` keeps it pointing along your aim |
 
-Both are under `[Light]` in `CameraUnlock.ini`.
+Set `LightMultiplier` under `[Light]` in `CameraUnlock.ini`.
 
 ## Configuration
 
@@ -195,7 +194,6 @@ The built-in value of each setting set to `default` below:
 - `CycleTrackingModeKey=PageUp, Ctrl+Shift+G`
 - `YawModeKey=PageDown, Ctrl+Shift+H`
 - `TrueFreeLookKey=Insert, Ctrl+Shift+U`
-- `LightFollowsHead=true`
 - `LightMultiplier=1.5`
 
 With every setting at its default, the file reads:
@@ -208,8 +206,9 @@ With every setting at its default, the file reads:
 ; that keeps its settings in CameraUnlock.ini reads: %AppData%\CameraUnlock\Defaults.ini on
 ; Windows, $XDG_CONFIG_HOME/CameraUnlock/Defaults.ini (normally ~/.config/CameraUnlock) on
 ; Linux, under Wine and Proton too, and ~/Library/Application Support/CameraUnlock/Defaults.ini
-; on macOS. The log names the file it read. Write a value instead of default to change that
-; setting for this game only.
+; on macOS. The log names the file it read. Change a setting in Defaults.ini to change it in
+; every game that has it set to default, or write a value here instead of default to change it
+; for this game only.
 
 [CameraUnlock]
 ; Written by the mod. Leave this section in place.
@@ -265,8 +264,6 @@ YawModeKey=default
 TrueFreeLookKey=default
 
 [Light]
-; true: a light you carry points where you look instead of where you aim.
-LightFollowsHead=default
 ; How far the light turns for each degree your head turns.
 ; 1 matches the view, 0 keeps the light on your aim.
 LightMultiplier=default

@@ -105,7 +105,6 @@ cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
     follows.Setting(C::ToggleKey, c.toggleKey, shipped.toggleKey);
     follows.Setting(C::CycleTrackingModeKey, c.positionToggleKey, shipped.positionToggleKey);
     follows.Setting(C::YawModeKey, c.yawModeKey, shipped.yawModeKey);
-    follows.NotInLegacy(C::LightFollowsHead);
     follows.NotInLegacy(C::LightMultiplier);
     // The builds before had no true free look. Their sights cycle on the same keys was a
     // different feature, so neither its mode nor its key carries over.
@@ -125,7 +124,7 @@ cfg::ConfigTable<Config> MakeConfigTable() {
         {C::UdpPort, C::EnableOnStartup, C::WorldSpaceYaw, C::RotationEnabled, C::LocalSmoothing,
          C::RemoteSmoothing, C::PositionEnabled, C::TrueFreeLook, C::PositionLimitX, C::PositionLimitY,
          C::PositionLimitYDown, C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey,
-         C::YawModeKey, C::TrueFreeLookKey, C::LightFollowsHead, C::LightMultiplier});
+         C::YawModeKey, C::TrueFreeLookKey, C::LightMultiplier});
     table.Select(C::WorldSpaceYaw).Writable()
         .Comment("true: yaw turns around the world's up axis and a lean moves along the ground.\n"
                  "false: both follow the camera's own axes.")

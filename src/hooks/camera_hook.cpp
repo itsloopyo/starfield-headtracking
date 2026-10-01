@@ -404,7 +404,7 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     }
     g_local.written = newLocal;
     const cameraunlock::effects::HeadFollowLightSettings& light = mod.GetConfig().light;
-    if (light.follows_head) TrackHelmetLight(cleanBasis, drawn, light.multiplier);
+    TrackHelmetLight(cleanBasis, drawn, light.multiplier);
 
     // Nothing is written to the node's world transform or its clip matrix here:
     // the rebuild described above discards both, and that address is also the

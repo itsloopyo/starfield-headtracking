@@ -234,7 +234,7 @@ void TestDefaultRowsFollowDefaultsIni() {
     Check(loaded.config.udp_port == 5252 && !loaded.config.world_space_yaw && loaded.config.toggle_key_name == "F8" &&
               loaded.config.light.multiplier == 1.0f,
           "rows holding default take Defaults.ini's values");
-    Check(loaded.config.cycle_tracking_mode_key_name == "PageUp, Ctrl+Shift+G" && loaded.config.light.follows_head,
+    Check(loaded.config.cycle_tracking_mode_key_name == "PageUp, Ctrl+Shift+G",
           "a row Defaults.ini leaves out takes the built-in value");
 
     WriteBytes(dir + kConfigFileName, Replace(Rendered(), "WorldSpaceYaw=default\r\n", "WorldSpaceYaw=true\r\n"));

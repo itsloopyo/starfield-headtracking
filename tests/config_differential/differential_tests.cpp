@@ -648,7 +648,7 @@ const std::set<Concept>& AllRows() {
         Concept::PositionEnabled,   Concept::PositionLimitX,       Concept::PositionLimitY,
         Concept::PositionLimitYDown, Concept::PositionLimitZ,      Concept::PositionLimitZBack,
         Concept::ToggleKey,         Concept::CycleTrackingModeKey, Concept::YawModeKey,
-        Concept::LightFollowsHead,  Concept::LightMultiplier,      Concept::TrueFreeLook,
+        Concept::LightMultiplier,   Concept::TrueFreeLook,
         Concept::TrueFreeLookKey,
     };
     return all;
@@ -729,7 +729,6 @@ Config OverDefaults(Config c, const std::set<Concept>& follows, const Config& de
                 c.cycle_tracking_mode_key_name = defaults_ini.cycle_tracking_mode_key_name;
                 break;
             case Concept::YawModeKey: c.yaw_mode_key_name = defaults_ini.yaw_mode_key_name; break;
-            case Concept::LightFollowsHead: c.light.follows_head = defaults_ini.light.follows_head; break;
             case Concept::LightMultiplier: c.light.multiplier = defaults_ini.light.multiplier; break;
             case Concept::TrueFreeLook: c.true_free_look = defaults_ini.true_free_look; break;
             case Concept::TrueFreeLookKey: c.true_free_look_key_name = defaults_ini.true_free_look_key_name; break;
@@ -776,7 +775,7 @@ const char kSkewedDefaults[] =
     "[Position]\r\nPositionEnabled=false\r\nTrueFreeLook=true\r\nPositionLimitX=0.25\r\nPositionLimitY=0.25\r\n"
     "PositionLimitYDown=0.25\r\nPositionLimitZ=0.25\r\nPositionLimitZBack=0.25\r\n\r\n"
     "[Hotkeys]\r\nToggleKey=F8\r\nCycleTrackingModeKey=F9\r\nYawModeKey=F10\r\nTrueFreeLookKey=F11\r\n\r\n"
-    "[Light]\r\nLightFollowsHead=false\r\nLightMultiplier=1.0\r\n";
+    "[Light]\r\nLightMultiplier=1.0\r\n";
 
 cfg::ConfigOwnerOptions<Config> Options(const std::wstring& folder, const std::wstring& defaults) {
     return StarfieldHT::MakeConfigOwnerOptions(folder + L"\\", cfg::DefaultsFile::At(defaults));
