@@ -235,6 +235,38 @@ void ReportHudException(DWORD code, const char* action = "positioning the stock 
         action, code, static_cast<unsigned long long>(n));
 }
 
+void PositionIncomingDamage(uintptr_t movie, uintptr_t root, double offsetX, double offsetY) {
+    constexpr char damageX[] = "root1.CenterGroup_mc.DirectionalHitIndicatorBase_mc.x";
+    constexpr char damageY[] = "root1.CenterGroup_mc.DirectionalHitIndicatorBase_mc.y";
+    static uintptr_t lastMovie = 0;
+    static double baseX = 0, baseY = 0;
+    static bool bound = false;
+    if (movie != lastMovie) {
+        lastMovie = movie;
+        bound = GetNumber(root, damageX, baseX) && GetNumber(root, damageY, baseY);
+        if (!bound) {
+            Logger::Instance().Error("Incoming damage: HUD movie has no numeric indicator position");
+        } else {
+            Logger::Instance().Info("Incoming damage indicators bound: origin %.2f, %.2f", baseX, baseY);
+        }
+    }
+    if (!bound) return;
+
+    // This container and ReticleBase share CenterGroup, so their offsets use
+    // the same parent space. Leave each damage arc's rotation and animation alone.
+    if (!SetNumber(root, damageX, baseX + offsetX) || !SetNumber(root, damageY, baseY + offsetY)) {
+        ReportTransientFailure("could not set incoming damage indicator position");
+        return;
+    }
+    static uint64_t lastLog = 0;
+    const auto now = GetTickCount64();
+    if (now - lastLog >= 1000) {
+        lastLog = now;
+        Logger::Instance().Info("incoming damage: reticle offset(%+.2f,%+.2f) hud(%.2f,%.2f)",
+            offsetX, offsetY, baseX + offsetX, baseY + offsetY);
+    }
+}
+
 void PositionReticle(uintptr_t menu) {
     // Read through SafeRead rather than dereferenced: the movie pointer is a
     // member of the menu the game handed us, but the root is read out of
@@ -282,7 +314,9 @@ void PositionReticle(uintptr_t menu) {
     }
     if (!SetNumber(root, kReticleX, x) || !SetNumber(root, kReticleY, y)) {
         ReportTransientFailure("could not set the HUD reticle position");
+        return;
     }
+    PositionIncomingDamage(movie, root, x - baseX, y - baseY);
 }
 
 void PositionHitMarker(uintptr_t menu) {
