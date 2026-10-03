@@ -142,6 +142,10 @@ controller points it, so with your head turned it sits off to one side with its
 sights still lined up, and your rounds land where those sights point. Head
 movement is scaled to the zoom, so a scope does not magnify it.
 
+A scope that fills the screen moves with your aim in every mode: with your head
+turned or leaned it sits off centre, and its reticle stays on the point your
+round will land. A laser sight's beam stays on the weapon when you lean.
+
 `Insert` / `Shift+Alt+U` cycles three ways of handling a lean while you aim,
 and the mod saves the one you pick, so it holds the next time you start the
 game:

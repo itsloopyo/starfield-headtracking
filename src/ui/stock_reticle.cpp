@@ -623,9 +623,119 @@ bool SetShipReticlePosition(const ShipReticlePosition& position, bool shifted) {
     }
 }
 
+// A scoped weapon's sights-up view is ScopeMenu's movie: a mask and a reticle
+// over the whole frame, centred on the screen. With the head turned or leaned
+// the round no longer lands at the centre, so the scope is moved onto the aim
+// point for the capture, as the crosshair is at the hip. Everything of the
+// scope sits in Menu_mc; the hold-breath prompt and its backing are its
+// children and are moved back so they stay where they are.
+HudUpdate g_scopeOriginal = nullptr;
+std::atomic<uintptr_t> g_scopeMovie{0};
+std::atomic<uint64_t> g_scopeUpdatedMs{0};
+
+// The scope menu's update stops when the sights come down and its movie is
+// freed some time after, so a movie it has not updated this recently is not
+// taken for the scope.
+constexpr uint64_t kScopeFreshMs = 500;
+
+void UpdateScopeMenu(uintptr_t menu) {
+    g_scopeOriginal(menu);
+    uintptr_t movie = 0;
+    cameraunlock::memory::SafeRead(menu + kMenuMovieOffset, movie);
+    g_scopeMovie.store(movie, std::memory_order_relaxed);
+    g_scopeUpdatedMs.store(GetTickCount64(), std::memory_order_relaxed);
+}
+
+constexpr const char* kScopeClips[][2] = {
+    {"root1.Menu_mc.x", "root1.Menu_mc.y"},
+    {"root1.Menu_mc.HoldBreathButton_mc.x", "root1.Menu_mc.HoldBreathButton_mc.y"},
+    {"root1.Menu_mc.ButtonBackground_mc.x", "root1.Menu_mc.ButtonBackground_mc.y"},
+};
+constexpr size_t kScopeClipCount = sizeof(kScopeClips) / sizeof(kScopeClips[0]);
+
+struct ScopePosition {
+    uintptr_t root = 0;
+    double x[kScopeClipCount] = {}, y[kScopeClipCount] = {};
+    double offsetX[kScopeClipCount] = {}, offsetY[kScopeClipCount] = {};
+};
+
+bool ReadScopePosition(uintptr_t movie, const CameraFrame& frame, ScopePosition& position) {
+    uintptr_t root = 0;
+    if (!cameraunlock::memory::SafeRead(movie + kMovieRootOffset, root) || !root) return false;
+    position.root = root;
+    for (size_t i = 0; i < kScopeClipCount; ++i) {
+        if (!GetNumber(root, kScopeClips[i][0], position.x[i]) || !GetNumber(root, kScopeClips[i][1], position.y[i])) return false;
+    }
+    double rootX = 0, rootY = 0, menuX = 0, menuY = 0;
+    if (!GetNumber(root, "root1.scaleX", rootX) || !GetNumber(root, "root1.scaleY", rootY)
+        || !GetNumber(root, "root1.Menu_mc.scaleX", menuX) || !GetNumber(root, "root1.Menu_mc.scaleY", menuY)
+        || rootX * menuX == 0 || rootY * menuY == 0) return false;
+    using GetRect = MovieRect* (*)(uintptr_t, MovieRect*);
+    const GetRect getRect = Virtual<GetRect>(movie, "MovieRect", kSlotGetVisibleRect);
+    if (!getRect) return false;
+    MovieRect rect{};
+    getRect(movie, &rect);
+    if (!(rect.right > rect.left) || !(rect.bottom > rect.top)) return false;
+    float nx = 0, ny = 0;
+    // An aim behind the view has nowhere on screen to put the scope.
+    if (!ProjectPlayerAim(frame, nx, ny)) return false;
+    position.offsetX[0] = nx * (rect.right - rect.left) * 0.5 / rootX;
+    position.offsetY[0] = -ny * (rect.bottom - rect.top) * 0.5 / rootY;
+    for (size_t i = 1; i < kScopeClipCount; ++i) {
+        position.offsetX[i] = -position.offsetX[0] / menuX;
+        position.offsetY[i] = -position.offsetY[0] / menuY;
+    }
+    return std::isfinite(position.offsetX[0]) && std::isfinite(position.offsetY[0]);
+}
+
+bool PrepareScope(uintptr_t movie, const CameraFrame& frame, ScopePosition& position) {
+    __try {
+        return ReadScopePosition(movie, frame, position);
+    } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
+        ReportHudException(GetExceptionCode(), "reading the scope");
+        return false;
+    }
+}
+
+bool SetScopePosition(const ScopePosition& position, bool shifted) {
+    __try {
+        bool set = true;
+        for (size_t i = 0; i < kScopeClipCount; ++i) {
+            set = SetNumber(position.root, kScopeClips[i][0], position.x[i] + (shifted ? position.offsetX[i] : 0)) && set;
+            set = SetNumber(position.root, kScopeClips[i][1], position.y[i] + (shifted ? position.offsetY[i] : 0)) && set;
+        }
+        return set;
+    } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
+        ReportHudException(GetExceptionCode(), "positioning the scope");
+        return false;
+    }
+}
+
+uint64_t CaptureScope(uintptr_t movie, bool onlyChanges, const CameraFrame& frame) {
+    ScopePosition position;
+    if (!PrepareScope(movie, frame, position)) {
+        ReportTransientFailure("could not read the scope layout");
+        return g_captureOriginal(movie, onlyChanges);
+    }
+    if (!SetScopePosition(position, true)) ReportTransientFailure("could not position the scope");
+    // The offset lasts for the capture only, so the movie's own layout code
+    // never reads it back.
+    const uint64_t result = g_captureOriginal(movie, onlyChanges);
+    if (!SetScopePosition(position, false)) ReportTransientFailure("could not restore the scope");
+    return result;
+}
+
 uint64_t CaptureHudMovies(uintptr_t movie, bool onlyChanges) {
     if (movie && movie == g_hudMovie.load(std::memory_order_relaxed)) {
         HoldAimMarkerForCapture(movie);
+        return g_captureOriginal(movie, onlyChanges);
+    }
+    if (movie && movie == g_scopeMovie.load(std::memory_order_relaxed)
+        && GetTickCount64() - g_scopeUpdatedMs.load(std::memory_order_relaxed) < kScopeFreshMs) {
+        CameraFrame scopeFrame{};
+        if (Mod::Instance().IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(scopeFrame)) {
+            return CaptureScope(movie, onlyChanges, scopeFrame);
+        }
         return g_captureOriginal(movie, onlyChanges);
     }
     const Mod& mod = Mod::Instance();
@@ -715,7 +825,8 @@ bool InstallShipReticleHook() {
     }
     g_releaseValue = reinterpret_cast<void (*)(GfxNumber*)>(base + profile->gfxReleaseValueRva);
     const uintptr_t shipVtable = FindVtableByRTTI(base, moduleSize, ".?AVSpaceshipHudMenu@@");
-    uintptr_t shipUpdate = 0;
+    const uintptr_t scopeVtable = FindVtableByRTTI(base, moduleSize, ".?AVScopeMenu@@");
+    uintptr_t shipUpdate = 0, scopeUpdate = 0;
     const uintptr_t movieVtable = FindVtableByRTTI(base, moduleSize, ".?AVMovieImpl@GFx@Scaleform@@");
     uintptr_t capture = 0;
     if (!shipVtable || !movieVtable
@@ -731,6 +842,19 @@ bool InstallShipReticleHook() {
     if (shipStatus != MH_OK) {
         Logger::Instance().Error("Ship HUD hook: %s", MH_StatusToString(shipStatus));
         return false;
+    }
+    // The scope menu's update sits in the slot the ship HUD's does: both are the
+    // same virtual of the menu base. Without it a scope stays at the centre of
+    // the screen, which is the game's own behaviour, so tracking carries on.
+    if (scopeVtable
+        && cameraunlock::memory::SafeRead(scopeVtable + RuntimeSlot("ShipHudUpdate", 11) * sizeof(uintptr_t), scopeUpdate)
+        && scopeUpdate >= base && scopeUpdate - base < moduleSize && scopeUpdate != shipUpdate
+        && MH_CreateHook(reinterpret_cast<void*>(scopeUpdate), reinterpret_cast<void*>(&UpdateScopeMenu),
+                         reinterpret_cast<void**>(&g_scopeOriginal)) == MH_OK) {
+        Logger::Instance().Info("Scope menu hook installed");
+    } else {
+        Logger::Instance().Warning("Scope: the scope menu's update was not found in this build, so a scope's "
+                                   "reticle stays at the centre of the screen when your head is turned");
     }
     const MH_STATUS captureStatus = MH_CreateHook(reinterpret_cast<void*>(capture),
         reinterpret_cast<void*>(&CaptureHudMovies), reinterpret_cast<void**>(&g_captureOriginal));
