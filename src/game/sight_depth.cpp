@@ -2,9 +2,8 @@
 #include "sight_depth.h"
 
 #include "core/logger.h"
-#include "game/build_profile.h"
-#include "game/build_selection.h"
 #include "game/scene_layout.h"
+#include "game/scene_nodes.h"
 
 #include <cameraunlock/memory/safe_memory.h>
 
@@ -14,6 +13,7 @@ namespace StarfieldHT::SightDepth {
 namespace {
 
 using cameraunlock::memory::SafeRead;
+using namespace SceneNodes;
 
 // A held weapon hangs its sights off this attach node, iron sights and optics
 // alike. On the Eon pistol it sits on the aim line 0.394 m from the eye with the
@@ -21,16 +21,9 @@ using cameraunlock::memory::SafeRead;
 // 0.40 m, from how fast it grows as the eye closes on it).
 constexpr char kSightNodeName[] = "P-Scope";
 
-// NiObjectNET::name is a pointer to a pooled string entry with the characters
-// from +0x18, as helmet_light.cpp reads it.
-constexpr uintptr_t kNameOffset = 0x10;
-constexpr uintptr_t kNameTextOffset = 0x18;
-constexpr uintptr_t kChildCountsOffset = 8;
-
 // The player's skeleton was 191 nodes with a pistol in hand, the sight node
 // nine levels down.
 constexpr int kMaxNodes = 600;
-constexpr uint16_t kMaxChildren = 64;
 
 // The node is looked for again this often rather than kept: a load or a weapon
 // swap frees it, and nothing says so.
@@ -40,63 +33,6 @@ constexpr uint64_t kMissingLogIntervalMs = 5000;
 float g_depth = std::numeric_limits<float>::infinity();
 uint64_t g_lastRefreshMs = 0;
 
-bool IsObject(uintptr_t p) {
-    return p > 0x10000 && p < 0x00007FFFFFFFFFFFull && (p & 7) == 0;
-}
-
-bool IsSightNode(uintptr_t node) {
-    const auto* contracts = RuntimeContracts();
-    const auto nameOffset = contracts ? contracts->members.at("NodeName") : kNameOffset;
-    const auto textOffset = contracts ? contracts->members.at("NameCharacters") : kNameTextOffset;
-    uintptr_t entry = 0;
-    char text[sizeof(kSightNodeName)] = {};
-    return SafeRead(node + nameOffset, entry) && IsObject(entry)
-        && SafeRead(entry + textOffset, text)
-        && std::memcmp(text, kSightNodeName, sizeof(kSightNodeName)) == 0;
-}
-
-bool ParentIs(uintptr_t node, uintptr_t parent) {
-    uintptr_t p = 0;
-    return SafeRead(node + GetSceneLayout().parentOffset, p) && p == parent;
-}
-
-// A leaf that is not a node has no children array where a node keeps one, so
-// every child is checked against its own parent pointer before it is followed.
-uint16_t ReadChildren(uintptr_t node, uintptr_t out[kMaxChildren]) {
-    const SceneLayout& layout = GetSceneLayout();
-    uintptr_t data = 0;
-    uint16_t count = 0;
-    if (!SafeRead(node + layout.childrenDataOffset, data) || !IsObject(data)) return 0;
-    if (const auto* contracts = RuntimeContracts()) {
-        if (!SafeRead(node + contracts->members.at("NodeChildCount"), count)) return 0;
-    } else {
-        uint16_t counts[3] = {};
-        if (!SafeRead(node + layout.childrenDataOffset + kChildCountsOffset, counts)) return 0;
-        count = counts[0];
-        if (counts[1] < count) count = counts[1];
-        if (counts[2] < count) count = counts[2];
-    }
-    if (count > kMaxChildren) return 0;
-    uint16_t kept = 0;
-    for (uint16_t i = 0; i < count; ++i) {
-        uintptr_t child = 0;
-        if (SafeRead(data + i * sizeof(uintptr_t), child) && IsObject(child) && ParentIs(child, node)) {
-            out[kept++] = child;
-        }
-    }
-    return kept;
-}
-
-// The skeleton's Camera bone, which sits exactly on the camera's eye.
-uintptr_t ReadCameraBone() {
-    static const BuildProfile* const profile = ResolveBuildProfile();
-    static const uintptr_t moduleBase = reinterpret_cast<uintptr_t>(GetModuleHandleA(GAME_EXE));
-    uintptr_t player = 0, bone = 0;
-    if (!profile || !SafeRead(moduleBase + profile->playerSingletonRva, player) || !IsObject(player)
-        || !SafeRead(player + profile->playerCameraBoneOffset, bone) || !IsObject(bone)) return 0;
-    return bone;
-}
-
 // Breadth first from the skeleton's Root, which is the Camera bone's parent and
 // the ancestor of the weapon.
 uintptr_t FindSightNode(uintptr_t root) {
@@ -105,7 +41,7 @@ uintptr_t FindSightNode(uintptr_t root) {
     queue[tail++] = root;
     while (head < tail) {
         const uintptr_t node = queue[head++];
-        if (IsSightNode(node)) return node;
+        if (NameStartsWith(node, kSightNodeName, sizeof(kSightNodeName))) return node;
         uintptr_t children[kMaxChildren];
         const uint16_t count = ReadChildren(node, children);
         for (uint16_t i = 0; i < count && tail < kMaxNodes; ++i) queue[tail++] = children[i];

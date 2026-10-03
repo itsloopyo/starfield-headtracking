@@ -51,6 +51,10 @@ void* g_submitTarget = nullptr;
 uintptr_t g_registryAddress = 0;
 CameraFrameHistory g_renderFrames;
 
+std::mutex g_passViewMutex;
+WeaponPassView g_passView;
+bool g_havePassView = false;
+
 // The submit hook runs once a rendered frame, so a read chain that has gone
 // stale would otherwise write a line per frame for the rest of the session.
 // Doubling keeps the first failure, the fact that it is still failing, and a
@@ -148,7 +152,8 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             std::memcpy(adjusted, camera, sizeof(adjusted));
             NiMatrix44 view{}, inverse{};
             const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsTrueFreeLook(), NowMs());
-            CompensateWeaponProjection(frame.clean, drawn, worldRight / frustum[1], worldTop / frustum[2],
+            WeaponPassView passView{worldRight / frustum[1], worldTop / frustum[2], cleanEyeShare};
+            CompensateWeaponProjection(frame.clean, drawn, passView.scaleX, passView.scaleY,
                                       cleanEyeShare, frame.sightsUp, adjusted, view, inverse);
             if (cleanEyeShare > 0.0f) {
                 CameraFrame aimFrame = frame;
@@ -157,7 +162,7 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
                 aimFrame.frustumTop = worldTop;
                 float aimX = 0, aimY = 0, distance = 0;
                 const bool aligned = ProjectPlayerAim(aimFrame, aimX, aimY, &distance)
-                    && AlignWeaponAim(aimFrame, distance, frustum[1], frustum[2], cleanEyeShare, view, inverse);
+                    && AlignWeaponAim(aimFrame, distance, frustum[1], frustum[2], passView, view, inverse);
                 static std::atomic<unsigned long long> lastLog{0};
                 const auto now = NowMs();
                 if (now - lastLog.load(std::memory_order_relaxed) >= 1000) {
@@ -165,6 +170,11 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
                     Logger::Instance().Info("weapon aim: aligned=%d distance=%.3f target(%+.4f,%+.4f) cleanEyeShare=%.3f world(%.4f,%.4f) weapon(%.4f,%.4f)",
                         aligned, distance, aimX, aimY, cleanEyeShare, worldRight, worldTop, frustum[1], frustum[2]);
                 }
+            }
+            {
+                std::lock_guard<std::mutex> lock(g_passViewMutex);
+                g_passView = passView;
+                g_havePassView = true;
             }
             std::memcpy(adjusted + kRenderViewFloat, &view, sizeof(view));
             std::memcpy(adjusted + kRenderInverseFloat, &inverse, sizeof(inverse));
@@ -174,6 +184,12 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
     }
     g_original(previous, reset, camera, frustum, ortho, jitter, pass, output);
 }
+}
+
+bool LatestWeaponPassView(WeaponPassView& out) {
+    std::lock_guard<std::mutex> lock(g_passViewMutex);
+    out = g_passView;
+    return g_havePassView;
 }
 
 bool FindSubmittedCameraFrame(const CameraBasis& drawn, CameraFrame& out) {

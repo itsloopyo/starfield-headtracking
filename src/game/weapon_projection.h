@@ -7,6 +7,30 @@
 
 namespace StarfieldHT {
 
+// Sights locked draws from the clean eye, so a lean leaves the weapon where
+// it is in the frame. The weapon sits about a third of a metre from the eye,
+// so the lean's honest parallax would throw it most of the way across the
+// frame and take the sights off the eye while aiming. True free look draws
+// from the tracked eye and keeps that parallax: the weapon stays put in the
+// world and the head moves around it. cleanEyeShare is 1 in sights locked
+// and 0 in the free look modes, and between the two while the mode slides.
+//
+// With the sights up the part of the lean along the aim is kept in every
+// mode: the eye moves along the sight line, which leaves it on the sights,
+// so the weapon stays put and leaning in brings the sights closer. At the hip
+// the weapon comes with the eye along the aim as well, where a forward lean
+// would otherwise carry the eye over the top of it. sightsUp is 0 at the hip
+// and 1 with the sights fully up.
+inline void WeaponPassEye(const CameraBasis& clean, const CameraBasis& drawn, float cleanEyeShare,
+                          float sightsUp, float eye[3]) {
+    float lean[3];
+    for (int i = 0; i < 3; ++i) lean[i] = drawn.e[i] - clean.e[i];
+    const float along = Dot3(lean, clean.f) * sightsUp;
+    for (int i = 0; i < 3; ++i) {
+        eye[i] = drawn.e[i] - (lean[i] - clean.f[i] * along) * cleanEyeShare;
+    }
+}
+
 inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBasis& drawn,
                                       float scaleX, float scaleY, float cleanEyeShare, float sightsUp,
                                       float eye[3], NiMatrix44& view, NiMatrix44& inverseView) {
@@ -37,30 +61,24 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
         }
     }
     view.entry[3][3] = inverseView.entry[3][3] = 1.0f;
-    // Sights locked draws from the clean eye, so a lean leaves the weapon where
-    // it is in the frame. The weapon sits about a third of a metre from the eye,
-    // so the lean's honest parallax would throw it most of the way across the
-    // frame and take the sights off the eye while aiming. True free look draws
-    // from the tracked eye and keeps that parallax: the weapon stays put in the
-    // world and the head moves around it. cleanEyeShare is 1 in sights locked
-    // and 0 in the free look modes, and between the two while the mode slides.
-    //
-    // With the sights up the part of the lean along the aim is kept in every
-    // mode: the eye moves along the sight line, which leaves it on the sights,
-    // so the weapon stays put and leaning in brings the sights closer. At the hip
-    // the weapon comes with the eye along the aim as well, where a forward lean
-    // would otherwise carry the eye over the top of it. sightsUp is 0 at the hip
-    // and 1 with the sights fully up.
-    float lean[3];
-    for (int i = 0; i < 3; ++i) lean[i] = drawn.e[i] - clean.e[i];
-    const float along = Dot3(lean, clean.f) * sightsUp;
-    for (int i = 0; i < 3; ++i) {
-        eye[i] = drawn.e[i] - (lean[i] - clean.f[i] * along) * cleanEyeShare;
-    }
+    WeaponPassEye(clean, drawn, cleanEyeShare, sightsUp, eye);
 }
 
+// What the weapon pass did to the held weapon, for anything drawn with the
+// world that has to meet the weapon on screen. scale is the world frustum's
+// extent over the weapon pass's, and shift is AlignWeaponAim's, in half frames.
+struct WeaponPassView {
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float cleanEyeShare = 0.0f;
+    float shiftX = 0.0f;
+    float shiftY = 0.0f;
+};
+
 inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weaponRight, float weaponTop,
-                           float cleanEyeShare, NiMatrix44& view, NiMatrix44& inverseView) {
+                           WeaponPassView& pass, NiMatrix44& view, NiMatrix44& inverseView) {
+    const float cleanEyeShare = pass.cleanEyeShare;
+    pass.shiftX = pass.shiftY = 0.0f;
     if (cleanEyeShare == 0.0f) return true;
     float aimX = 0, aimY = 0;
     const float depth = Dot3(frame.clean.f, frame.drawn.f);
@@ -71,6 +89,8 @@ inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weapo
     const float shiftX = (aimX - directionX) * weaponRight * cleanEyeShare;
     const float shiftY = (aimY - directionY) * weaponTop * cleanEyeShare;
     if (!std::isfinite(shiftX) || !std::isfinite(shiftY)) return false;
+    pass.shiftX = shiftX / weaponRight;
+    pass.shiftY = shiftY / weaponTop;
 
     // Drawing the gun from the clean eye removes near-weapon parallax. Restore
     // only the target's screen displacement so locked sights still mark the aim.
@@ -80,6 +100,26 @@ inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weapo
         inverseView.entry[2][i] -= shiftX * inverseView.entry[0][i] + shiftY * inverseView.entry[1][i];
     }
     return true;
+}
+
+// The world-space point the world pass draws on the pixel the weapon pass draws
+// `point` on. The weapon pass has a narrower projection and, in sights locked,
+// an eye of its own, so a point of the weapon is not where the world pass
+// would put it.
+inline void WeaponPointInWorldPass(const CameraBasis& clean, const CameraBasis& drawn,
+                                   float worldRight, float worldTop, float sightsUp,
+                                   const WeaponPassView& pass, const float point[3], float out[3]) {
+    float eye[3], fromEye[3];
+    WeaponPassEye(clean, drawn, pass.cleanEyeShare, sightsUp, eye);
+    for (int i = 0; i < 3; ++i) fromEye[i] = point[i] - eye[i];
+    const float right = (pass.scaleX - 1.0f) * Dot3(fromEye, clean.r);
+    const float up = (pass.scaleY - 1.0f) * Dot3(fromEye, clean.u);
+    for (int i = 0; i < 3; ++i) fromEye[i] += right * clean.r[i] + up * clean.u[i];
+    const float depth = Dot3(fromEye, drawn.f);
+    for (int i = 0; i < 3; ++i) {
+        out[i] = drawn.e[i] + fromEye[i]
+               + depth * (worldRight * pass.shiftX * drawn.r[i] + worldTop * pass.shiftY * drawn.u[i]);
+    }
 }
 
 // The aim mode key moves the weapon's eye by the whole lean, so it rides AdsFade

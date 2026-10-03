@@ -8,6 +8,7 @@
 #include "hooks/aim_hook.h"
 #include "hooks/weapon_hook.h"
 #include "game/build_profile.h"
+#include "game/laser_beam.h"
 #include "ui/stock_reticle.h"
 
 #include <cameraunlock/tracking/tracking_mode.h>
@@ -252,6 +253,7 @@ bool Mod::InitializeHooks() {
         Logger::Instance().Error("Ship aim UI positioning is unavailable");
         return false;
     }
+    InstallLaserBeamHook();
 
     // MH_EnableHook(MH_ALL_HOOKS) reports the first failure and may have enabled
     // some of the rest, and "some" could be the camera hook without the aim hook,

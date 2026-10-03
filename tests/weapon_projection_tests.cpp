@@ -3,6 +3,7 @@
 #include <initializer_list>
 #include "game/weapon_projection.h"
 #include "game/aim_projection.h"
+#include "game/laser_beam.h"
 
 using namespace StarfieldHT;
 
@@ -132,9 +133,29 @@ int main() {
             NiMatrix44 view{}, inverse{};
             CompensateWeaponProjection(clean, frame.drawn,
                 frame.frustumRight / weaponRight, frame.frustumTop / weaponTop, 1.0f, 0.0f, eye, view, inverse);
-            if (!AlignWeaponAim(frame, distance, weaponRight, weaponTop, 1.0f, view, inverse)) {
+            WeaponPassView pass{frame.frustumRight / weaponRight, frame.frustumTop / weaponTop, 1.0f};
+            if (!AlignWeaponAim(frame, distance, weaponRight, weaponTop, pass, view, inverse)) {
                 std::printf("FAIL: finite target alignment rejected\n");
                 ++failures;
+            }
+            // A point of the weapon, handed to the world pass, lands on the pixel
+            // the weapon pass draws it on.
+            for (const float side : {-0.12f, 0.09f}) {
+                float part[3], fromWeaponEye[3], inWeaponPass[3], inWorld[3], fromDrawnEye[3];
+                for (int i = 0; i < 3; ++i) {
+                    part[i] = clean.e[i] + 0.42f * clean.f[i] + side * clean.r[i] - 0.1f * clean.u[i];
+                    fromWeaponEye[i] = part[i] - eye[i];
+                }
+                MulRowVec(fromWeaponEye, RotationOf(view), inWeaponPass);
+                WeaponPointInWorldPass(clean, frame.drawn, frame.frustumRight, frame.frustumTop, 0.0f, pass, part, inWorld);
+                for (int i = 0; i < 3; ++i) fromDrawnEye[i] = inWorld[i] - frame.drawn.e[i];
+                const float depth = Dot3(fromDrawnEye, frame.drawn.f);
+                Near(Dot3(fromDrawnEye, frame.drawn.r) / depth / frame.frustumRight,
+                     inWeaponPass[0] / inWeaponPass[2] / weaponRight,
+                     "a weapon point in the world pass meets the weapon pass, horizontal");
+                Near(Dot3(fromDrawnEye, frame.drawn.u) / depth / frame.frustumTop,
+                     inWeaponPass[1] / inWeaponPass[2] / weaponTop,
+                     "a weapon point in the world pass meets the weapon pass, vertical");
             }
             const Mat3 identity = Mul(RotationOf(view), RotationOf(inverse));
             for (int i = 0; i < 3; ++i)
@@ -156,11 +177,12 @@ int main() {
                 "locked ADS sight follows finite-distance vertical aim under lean");
             const auto unchangedView = view;
             const auto unchangedInverse = inverse;
-            if (AlignWeaponAim(frame, -1.0f, weaponRight, weaponTop, 1.0f, view, inverse)) {
+            if (AlignWeaponAim(frame, -1.0f, weaponRight, weaponTop, pass, view, inverse)) {
                 std::printf("FAIL: invalid target depth accepted\n");
                 ++failures;
             }
-            AlignWeaponAim(frame, distance, weaponRight, weaponTop, 0.0f, view, inverse);
+            WeaponPassView freeLook{pass.scaleX, pass.scaleY, 0.0f};
+            AlignWeaponAim(frame, distance, weaponRight, weaponTop, freeLook, view, inverse);
             for (int i = 0; i < 4; ++i) {
                 for (int j = 0; j < 4; ++j) {
                     Near(view.entry[i][j], unchangedView.entry[i][j], "rejection and free look leave view unchanged");
@@ -168,6 +190,64 @@ int main() {
                 }
             }
         }
+    }
+
+    // The same holds in free look and with the sights part way up, where the
+    // weapon pass has an eye of its own and no alignment shift.
+    for (const float share : {0.0f, 0.4f, 1.0f}) {
+        for (const float sightsUp : {0.0f, 0.6f, 1.0f}) {
+            CameraBasis drawn = clean;
+            RotateBasis(drawn, up, -0.3f);
+            for (int i = 0; i < 3; ++i) drawn.e[i] += 0.2f * clean.r[i] - 0.05f * clean.u[i] + 0.1f * clean.f[i];
+            const float worldRight = 0.9f, worldTop = 0.5f, weaponRight = 0.64f, weaponTop = 0.36f;
+            const WeaponPassView pass{worldRight / weaponRight, worldTop / weaponTop, share};
+            float eye[3], part[3], fromWeaponEye[3], inWeaponPass[3], inWorld[3], fromDrawnEye[3];
+            NiMatrix44 view{}, inverse{};
+            CompensateWeaponProjection(clean, drawn, pass.scaleX, pass.scaleY, share, sightsUp, eye, view, inverse);
+            for (int i = 0; i < 3; ++i) {
+                part[i] = clean.e[i] + 0.42f * clean.f[i] + 0.09f * clean.r[i] - 0.1f * clean.u[i];
+                fromWeaponEye[i] = part[i] - eye[i];
+            }
+            MulRowVec(fromWeaponEye, RotationOf(view), inWeaponPass);
+            WeaponPointInWorldPass(clean, drawn, worldRight, worldTop, sightsUp, pass, part, inWorld);
+            for (int i = 0; i < 3; ++i) fromDrawnEye[i] = inWorld[i] - drawn.e[i];
+            const float depth = Dot3(fromDrawnEye, drawn.f);
+            Near(Dot3(fromDrawnEye, drawn.r) / depth / worldRight, inWeaponPass[0] / inWeaponPass[2] / weaponRight,
+                 "world pass meets weapon pass in every aim mode, horizontal");
+            Near(Dot3(fromDrawnEye, drawn.u) / depth / worldTop, inWeaponPass[1] / inWeaponPass[2] / weaponTop,
+                 "world pass meets weapon pass in every aim mode, vertical");
+        }
+    }
+
+    // A beam moved to a new start still ends where it ended, keeps its width and
+    // stays a beam: its side axes are unit length and square to its run.
+    {
+        NiMatrix44 beam{};
+        for (int i = 0; i < 3; ++i) {
+            beam.entry[0][i] = clean.r[i];
+            beam.entry[1][i] = clean.f[i] * 0.6f;
+            beam.entry[2][i] = clean.u[i];
+            beam.entry[3][i] = clean.e[i] + 0.4f * clean.f[i];
+        }
+        beam.entry[3][3] = 1.0f;
+        float start[3], oldEnd[3];
+        for (int i = 0; i < 3; ++i) {
+            start[i] = beam.entry[3][i] + 0.2f * clean.r[i] - 0.03f * clean.u[i];
+            oldEnd[i] = beam.entry[3][i] + kLaserBeamLength * beam.entry[1][i];
+        }
+        const NiMatrix44 moved = BeamFromStart(beam, start);
+        for (int i = 0; i < 3; ++i) {
+            Near(moved.entry[3][i], start[i], "the moved beam starts at the new start");
+            Near(moved.entry[3][i] + kLaserBeamLength * moved.entry[1][i], oldEnd[i], "the moved beam ends where it ended");
+        }
+        Near(Dot3(moved.entry[0], moved.entry[0]), 1.0f, "the beam keeps its width");
+        Near(Dot3(moved.entry[2], moved.entry[2]), 1.0f, "the beam keeps its height");
+        Near(Dot3(moved.entry[0], moved.entry[1]), 0.0f, "the beam's side axis is square to its run");
+        Near(Dot3(moved.entry[2], moved.entry[1]), 0.0f, "the beam's other side axis is square to its run");
+        Near(Dot3(moved.entry[0], moved.entry[2]), 0.0f, "the beam's side axes stay square to each other");
+        const NiMatrix44 same = BeamFromStart(beam, beam.entry[3]);
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j) Near(same.entry[i][j], beam.entry[i][j], "a beam moved nowhere is unchanged");
     }
 
     // The toggle slides the weapon's eye between the clean and the tracked eye
