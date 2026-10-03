@@ -24,17 +24,43 @@ size_t    g_moduleSize = 0;
 std::atomic<int> g_hitsLeft{0};
 std::atomic<bool> g_armed{false};
 
+constexpr int kCallerDepth = 6;
+
 struct Site {
     uintptr_t rva;
     uint32_t  count;
     bool      wrote;
+    // Return addresses above the instruction, from the first hit, as image offsets.
+    uintptr_t callers[kCallerDepth];
 };
 Site g_sites[kMaxDistinct] = {};
 int  g_siteCount = 0;
 CRITICAL_SECTION g_sitesLock;
 bool g_lockReady = false;
 
-void RecordSite(uintptr_t rva, bool wrote) {
+// The instruction that touches a transform is often a shared copy helper, so
+// the callers are what tell one writer from another.
+void UnwindCallers(const CONTEXT& at, uintptr_t out[kCallerDepth]) {
+    CONTEXT context = at;
+    for (int i = 0; i < kCallerDepth; ++i) {
+        out[i] = 0;
+        DWORD64 imageBase = 0;
+        const PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &imageBase, nullptr);
+        if (function) {
+            void* handlerData = nullptr;
+            DWORD64 establisher = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, context.Rip, function, &context, &handlerData,
+                             &establisher, nullptr);
+        } else {
+            context.Rip = *reinterpret_cast<DWORD64*>(context.Rsp);
+            context.Rsp += 8;
+        }
+        if (context.Rip < g_moduleBase || context.Rip >= g_moduleBase + g_moduleSize) return;
+        out[i] = static_cast<uintptr_t>(context.Rip) - g_moduleBase;
+    }
+}
+
+void RecordSite(uintptr_t rva, bool wrote, const CONTEXT& context) {
     EnterCriticalSection(&g_sitesLock);
     for (int i = 0; i < g_siteCount; ++i) {
         if (g_sites[i].rva == rva) {
@@ -48,6 +74,7 @@ void RecordSite(uintptr_t rva, bool wrote) {
         g_sites[g_siteCount].rva = rva;
         g_sites[g_siteCount].count = 1;
         g_sites[g_siteCount].wrote = wrote;
+        UnwindCallers(context, g_sites[g_siteCount].callers);
         ++g_siteCount;
     }
     LeaveCriticalSection(&g_sitesLock);
@@ -58,9 +85,13 @@ void ReportSites() {
     Logger::Instance().Info("=== access probe: %d distinct sites touched the camera page ===",
                             g_siteCount);
     for (int i = 0; i < g_siteCount; ++i) {
-        Logger::Instance().Info("  RVA 0x%llX  x%u  %s",
+        const uintptr_t* c = g_sites[i].callers;
+        Logger::Instance().Info("  RVA 0x%llX  x%u  %s  callers 0x%llX 0x%llX 0x%llX 0x%llX 0x%llX 0x%llX",
                                 static_cast<unsigned long long>(g_sites[i].rva),
-                                g_sites[i].count, g_sites[i].wrote ? "WRITE" : "read");
+                                g_sites[i].count, g_sites[i].wrote ? "WRITE" : "read",
+                                static_cast<unsigned long long>(c[0]), static_cast<unsigned long long>(c[1]),
+                                static_cast<unsigned long long>(c[2]), static_cast<unsigned long long>(c[3]),
+                                static_cast<unsigned long long>(c[4]), static_cast<unsigned long long>(c[5]));
     }
     Logger::Instance().Info("=== end access probe ===");
     LeaveCriticalSection(&g_sitesLock);
@@ -92,7 +123,7 @@ LONG CALLBACK GuardHandler(EXCEPTION_POINTERS* info) {
         const bool wrote = info->ExceptionRecord->NumberParameters >= 1
                         && info->ExceptionRecord->ExceptionInformation[0] != 0;
         if (ofInterest && rip >= g_moduleBase && rip < g_moduleBase + g_moduleSize) {
-            RecordSite(rip - g_moduleBase, wrote);
+            RecordSite(rip - g_moduleBase, wrote, *info->ContextRecord);
         }
         if (!ofInterest || g_hitsLeft.fetch_sub(1, std::memory_order_relaxed) > 1) {
             info->ContextRecord->EFlags |= 0x100;  // trap flag: step one instruction
