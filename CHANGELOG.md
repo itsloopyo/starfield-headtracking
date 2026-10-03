@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The chords are now `Shift+Alt+Y` (toggle tracking), `Shift+Alt+T` (cycle
+  tracking mode) and `Shift+Alt+U` (cycle aim mode), and horizon lock has no
+  chord. The `Ctrl+Shift` chords crouched you, because left Ctrl is the game's
+  sneak key, and `Ctrl+Shift+G` threw a grenade and `Ctrl+Shift+H` opened the
+  status screen, because the game acts on those letters whatever is held with
+  them. `End`, `Page Up`, `Page Down` and `Insert` are unchanged.
+- The four `[Hotkeys]` lists are this game's own and no longer follow
+  `Defaults.ini`. A list you had set to `default` now gives the keys above. A
+  list you wrote yourself is kept as you wrote it.
+
 ## [0.1.1] - 2026-10-03
 
 ### Added

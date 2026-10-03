@@ -106,19 +106,25 @@ Look straight ahead and use your tracker's center control.
 
 ## Controls
 
-Two equivalent binding sets by default - use whichever your keyboard has. The
-nav-cluster keys and the chords do exactly the same thing. Each is an entry in
-the `[Hotkeys]` lists in `CameraUnlock.ini`, so either can be rebound or
-removed there.
+Two binding sets by default - use whichever your keyboard has. A nav-cluster
+key and its chord do exactly the same thing. Each is an entry in the
+`[Hotkeys]` lists in `CameraUnlock.ini`, so either can be rebound or removed
+there.
 
 | Action              | Nav-cluster | Chord          |
 |---------------------|-------------|----------------|
-| Toggle tracking     | `End`       | `Ctrl+Shift+Y` |
-| Cycle tracking mode | `Page Up`   | `Ctrl+Shift+G` |
-| Toggle horizon lock | `Page Down` | `Ctrl+Shift+H` |
-| Cycle aim mode      | `Insert`    | `Ctrl+Shift+U` |
+| Toggle tracking     | `End`       | `Shift+Alt+Y`  |
+| Cycle tracking mode | `Page Up`   | `Shift+Alt+T`  |
+| Toggle horizon lock | `Page Down` |                |
+| Cycle aim mode      | `Insert`    | `Shift+Alt+U`  |
 
-`Page Up` / `Ctrl+Shift+G` cycles tracking mode:
+The chords are Starfield's own, not the `Ctrl+Shift` ones other head tracking
+mods use: left Ctrl is the game's sneak key, and the game acts on `G`
+(grenade), `H` (status) and `J` (database) whatever is held with them. That
+leaves horizon lock with no chord. These four lists are set in this game's
+`CameraUnlock.ini` and do not follow `Defaults.ini`.
+
+`Page Up` / `Shift+Alt+T` cycles tracking mode:
 
 1. Normal head-tracked gameplay
 2. Positional tracking disabled, rotational tracking enabled
@@ -136,7 +142,7 @@ controller points it, so with your head turned it sits off to one side with its
 sights still lined up, and your rounds land where those sights point. Head
 movement is scaled to the zoom, so a scope does not magnify it.
 
-`Insert` / `Ctrl+Shift+U` cycles three ways of handling a lean while you aim,
+`Insert` / `Shift+Alt+U` cycles three ways of handling a lean while you aim,
 and the mod saves the one you pick, so it holds the next time you start the
 game:
 
@@ -203,10 +209,6 @@ The built-in value of each setting set to `default` below:
 - `PositionLimitYDown=0.2`
 - `PositionLimitZ=0.4`
 - `PositionLimitZBack=0.1`
-- `ToggleKey=End, Ctrl+Shift+Y`
-- `CycleTrackingModeKey=PageUp, Ctrl+Shift+G`
-- `YawModeKey=PageDown, Ctrl+Shift+H`
-- `TrueFreeLookKey=Insert, Ctrl+Shift+U`
 - `LightMultiplier=1.5`
 
 With every setting at its default, the file reads:
@@ -271,13 +273,13 @@ PositionLimitZBack=default
 
 [Hotkeys]
 ; Turns head tracking on and off.
-ToggleKey=default
+ToggleKey=End, Shift+Alt+Y
 ; Changes the tracking mode: rotation and position, rotation only, position only.
-CycleTrackingModeKey=default
+CycleTrackingModeKey=PageUp, Shift+Alt+T
 ; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
-YawModeKey=default
+YawModeKey=PageDown
 ; Cycles the aim mode: sights locked, free look with a marker, true free look (TrueFreeLook, FreeLookMarker).
-TrueFreeLookKey=default
+TrueFreeLookKey=Insert, Shift+Alt+U
 
 [Light]
 ; How far the light turns for each degree your head turns.
@@ -321,7 +323,7 @@ across games.
   it, or move your aim to where you are looking.
 - **I can't see down the sights, they are misaligned.** You are in one of the
   free look modes and your head is leaned off them. Move your head back behind
-  them, or press `Insert` / `Ctrl+Shift+U` until the log says sights locked.
+  them, or press `Insert` / `Shift+Alt+U` until the log says sights locked.
 - **Nothing happens in game, and the log says there is no build profile.**
   Your game build is unsupported. Check the
   [Releases page](https://github.com/itsloopyo/starfield-headtracking/releases)

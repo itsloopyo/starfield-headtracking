@@ -114,8 +114,8 @@ void TestLegacyDefaultsMapToTheDefaults() {
     Check(cfg::RenderCanonical(table, mapped, {kConfigDisplayName}) ==
               cfg::RenderCanonical(table, table.defaults(), {kConfigDisplayName}),
           "the old defaults map to the defaults");
-    Check(mapped.toggle_key_name == "End, Ctrl+Shift+Y" && mapped.cycle_tracking_mode_key_name == "PageUp, Ctrl+Shift+G" &&
-              mapped.yaw_mode_key_name == "PageDown, Ctrl+Shift+H",
+    Check(mapped.toggle_key_name == "End, Shift+Alt+Y" && mapped.cycle_tracking_mode_key_name == "PageUp, Shift+Alt+T" &&
+              mapped.yaw_mode_key_name == "PageDown",
           "the old hotkeys and the chords the builds always registered become the fleet's key lists");
 }
 
@@ -257,11 +257,17 @@ void TestDefaultRowsFollowDefaultsIni() {
                "WorldSpaceYaw=false\r\n\r\n[Hotkeys]\r\nToggleKey=F8\r\n\r\n[Light]\r\nLightMultiplier=1.0\r\n");
     const auto loaded = cfg::ConfigOwner<Config>(Options(dir, defaults)).Load();
     Check(loaded.status == cfg::ConfigLoadStatus::Canonical, "the committed file loads as canonical");
-    Check(loaded.config.udp_port == 5252 && !loaded.config.world_space_yaw && loaded.config.toggle_key_name == "F8" &&
-              loaded.config.light.multiplier == 1.0f,
+    Check(loaded.config.udp_port == 5252 && !loaded.config.world_space_yaw && loaded.config.light.multiplier == 1.0f,
           "rows holding default take Defaults.ini's values");
-    Check(loaded.config.cycle_tracking_mode_key_name == "PageUp, Ctrl+Shift+G",
+    Check(loaded.config.local_smoothing == 0.0f && loaded.config.position.limit_z == 0.4f,
           "a row Defaults.ini leaves out takes the built-in value");
+    // Starfield's hotkey lists are the game's own (per_game): left Ctrl is its sneak key and it
+    // acts on G, H and J, so the fleet's keys in Defaults.ini never reach it.
+    Check(loaded.config.toggle_key_name == "End, Shift+Alt+Y" &&
+              loaded.config.cycle_tracking_mode_key_name == "PageUp, Shift+Alt+T" &&
+              loaded.config.yaw_mode_key_name == "PageDown" &&
+              loaded.config.true_free_look_key_name == "Insert, Shift+Alt+U",
+          "the hotkey lists are the game's own and do not follow Defaults.ini");
 
     WriteBytes(dir + kConfigFileName, Replace(Rendered(), "WorldSpaceYaw=default\r\n", "WorldSpaceYaw=true\r\n"));
     Check(cfg::ConfigOwner<Config>(Options(dir, defaults)).Load().config.world_space_yaw,

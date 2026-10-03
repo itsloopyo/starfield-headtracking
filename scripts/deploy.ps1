@@ -44,5 +44,5 @@ Write-DeploymentSuccess `
         "Page Down - Toggle yaw mode (world / local)",
         "Insert    - Cycle aim mode (sights locked / free look with marker / true free look)",
         "",
-        "No nav cluster? Chords: Ctrl+Shift+ Y=Toggle G=Mode H=Yaw U=Aim mode"
+        "No nav cluster? Chords: Shift+Alt+ Y=Toggle T=Mode U=Aim mode (yaw mode has none)"
     )

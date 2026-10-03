@@ -14,7 +14,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const migratedDir = process.argv[2];
 if (!migratedDir) throw new Error("usage: node lint-migrated.mjs <folder of migrated files>");
 
-const options = { dialect: "native", perGame: [] };
+const options = { dialect: "native", perGame: ["ToggleKey", "CycleTrackingModeKey", "YawModeKey", "TrueFreeLookKey"] };
 const HOLDS_VALUE = /\b(holds a value|hold values), and data\/config-format\.json per_game /;
 const failures = [];
 

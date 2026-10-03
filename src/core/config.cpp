@@ -18,12 +18,15 @@ namespace cfg = cameraunlock::config;
 using cameraunlock::input::KeyBinding;
 using cameraunlock::input::KeyModifiers;
 
-// A legacy hotkey code and the Ctrl+Shift chord the builds always registered beside it, as one
-// key list.
+// A legacy hotkey code and the chord this build gives the action, as one key list. The builds
+// before registered a Ctrl+Shift chord beside every code, which Starfield turns into a crouch and,
+// on G and H, a grenade and the status screen, so the chord that carries over is the one the
+// table's own list holds. `letter` is 0 for the action that has none.
 std::string KeyList(int vk, char letter, const char* key, std::vector<cfg::DroppedValue>& dropped) {
     const std::string code = cfg::LegacyVirtualKeyToBindings(vk, "Hotkeys", key, dropped);
+    if (letter == 0) return code;
     const std::string chord =
-        cameraunlock::input::FormatKeyBindings({KeyBinding{KeyModifiers::kCtrl | KeyModifiers::kShift, letter}});
+        cameraunlock::input::FormatKeyBindings({KeyBinding{KeyModifiers::kShift | KeyModifiers::kAlt, letter}});
     return code.empty() ? chord : code + ", " + chord;
 }
 
@@ -82,8 +85,8 @@ cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
     if (c.shipAimUIFollowsHead) dropped.push_back({cfg::DropRule::Reticle, "Ship", "AimUIFollowsHead", "true"});
 
     out.toggle_key_name = KeyList(c.toggleKey, 'Y', "ToggleKey", dropped);
-    out.cycle_tracking_mode_key_name = KeyList(c.positionToggleKey, 'G', "PositionToggleKey", dropped);
-    out.yaw_mode_key_name = KeyList(c.yawModeKey, 'H', "YawModeKey", dropped);
+    out.cycle_tracking_mode_key_name = KeyList(c.positionToggleKey, 'T', "PositionToggleKey", dropped);
+    out.yaw_mode_key_name = KeyList(c.yawModeKey, 0, "YawModeKey", dropped);
 
     // A setting the player never changed from what the builds before shipped follows Defaults.ini.
     // LimitY stood for both vertical limits, each hotkey code went with a chord that never
@@ -102,15 +105,12 @@ cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
     follows.Setting(C::PositionLimitYDown, c.positionLimitY, shipped.positionLimitY);
     follows.Setting(C::PositionLimitZ, c.positionLimitZ, shipped.positionLimitZ);
     follows.Setting(C::PositionLimitZBack, c.positionLimitZBack, shipped.positionLimitZBack);
-    follows.Setting(C::ToggleKey, c.toggleKey, shipped.toggleKey);
-    follows.Setting(C::CycleTrackingModeKey, c.positionToggleKey, shipped.positionToggleKey);
-    follows.Setting(C::YawModeKey, c.yawModeKey, shipped.yawModeKey);
     follows.NotInLegacy(C::LightMultiplier);
     // The builds before had no aim modes. Their sights cycle on the same keys was a
-    // different feature, so neither its mode nor its key carries over.
+    // different feature, so neither its mode nor its key carries over. The hotkey lists are
+    // the game's own and none of them follows Defaults.ini.
     follows.NotInLegacy(C::TrueFreeLook);
     follows.NotInLegacy(C::FreeLookMarker);
-    follows.NotInLegacy(C::TrueFreeLookKey);
 
     return status == legacy::ReadStatus::Absent
                ? cfg::ImportResult::Absent(std::move(dropped), std::move(shaping), follows.Concepts())
@@ -132,7 +132,15 @@ cfg::ConfigTable<Config> MakeConfigTable() {
         .Select(C::RotationEnabled).Writable()
         .Select(C::PositionEnabled).Writable()
         .Select(C::TrueFreeLook).Writable()
-        .Select(C::FreeLookMarker).Writable();
+        .Select(C::FreeLookMarker).Writable()
+        // Left Ctrl is Starfield's sneak toggle, so a Ctrl+Shift chord crouches the player, and the
+        // game acts on its own letter keys with any modifiers held: G throws a grenade, H opens the
+        // status screen and J the database. Y, U and T are the cluster's free letters, which leaves
+        // the yaw mode with no chord (per_game in core's data/config-format.json).
+        .Select(C::ToggleKey).PerGame("End, Shift+Alt+Y")
+        .Select(C::CycleTrackingModeKey).PerGame("PageUp, Shift+Alt+T")
+        .Select(C::YawModeKey).PerGame("PageDown")
+        .Select(C::TrueFreeLookKey).PerGame("Insert, Shift+Alt+U");
     return table;
 }
 

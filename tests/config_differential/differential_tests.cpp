@@ -224,13 +224,16 @@ struct Registration {
 using cameraunlock::input::KeyModifiers;
 constexpr unsigned kNav = static_cast<unsigned>(KeyModifiers::kNone);
 constexpr unsigned kChord = static_cast<unsigned>(KeyModifiers::kCtrl | KeyModifiers::kShift);
+// The chord modifiers this build registers: left Ctrl is Starfield's sneak key.
+constexpr unsigned kGameChord = static_cast<unsigned>(KeyModifiers::kShift | KeyModifiers::kAlt);
 
 std::string Describe(const std::vector<Registration>& regs) {
     std::string out;
     for (const Registration& r : regs) {
         char buf[80];
         std::snprintf(buf, sizeof(buf), "%s%s:%s0x%02X", out.empty() ? "" : " ", ActionName(r.action),
-                      r.modifiers == kChord ? "Ctrl+Shift+" : "", static_cast<unsigned>(r.vk));
+                      r.modifiers == kChord ? "Ctrl+Shift+" : r.modifiers == kGameChord ? "Shift+Alt+" : "",
+                      static_cast<unsigned>(r.vk));
         out += buf;
     }
     return out;
@@ -253,16 +256,16 @@ std::vector<Registration> OracleHotkeys(const oracle_api::Config& c) {
     return regs;
 }
 
-// RegisterBindings as the build that carries the frozen reader runs it (src/hooks/input_hook.cpp
-// at 43f310d), with the poller calls recorded.
+// What a legacy file's hotkeys become: the code each action had, as the build that carries the
+// frozen reader registered it (src/hooks/input_hook.cpp at 43f310d), and this game's own chords in
+// place of the Ctrl+Shift ones that build registered beside them ("chords" below).
 std::vector<Registration> ImportHotkeys(const legacy::Config& c) {
     std::vector<Registration> regs = {
         {Action::Toggle, c.toggleKey, kNav},
         {Action::CycleMode, c.positionToggleKey, kNav},
         {Action::YawMode, c.yawModeKey, kNav},
-        {Action::Toggle, 'Y', kChord},
-        {Action::CycleMode, 'G', kChord},
-        {Action::YawMode, 'H', kChord},
+        {Action::Toggle, 'Y', kGameChord},
+        {Action::CycleMode, 'T', kGameChord},
     };
     std::sort(regs.begin(), regs.end());
     return regs;
@@ -329,6 +332,10 @@ ListedDifference kComparisonOneDifferences[] = {
      "[Hotkeys] AdsModeKey is no longer read, and neither its key (Insert unless the player "
      "changed it) nor Ctrl+Shift+U cycles what the sights do: head tracking carries on through "
      "the sights"},
+    {"chords", "core 0ca6183",
+     "the Ctrl+Shift chords are gone: left Ctrl is the game's sneak key, and the game acts on G "
+     "(grenade) and H (status) whatever is held with them. Toggle is Shift+Alt+Y, the tracking "
+     "mode cycle Shift+Alt+T, and the yaw mode has no chord"},
 };
 
 ListedDifference& Listed(const char* id) {
@@ -372,11 +379,17 @@ void CompareOracleWithImport(const std::string& name, const OracleRun& o, const 
     for (const Registration& r : OracleHotkeys(o.cfg)) {
         if (r.action == Action::AdsMode) {
             sightsBound = true;
-        } else {
+        } else if (r.modifiers != kChord) {
             expected.push_back(r);
+        } else if (r.action == Action::Toggle) {
+            expected.push_back({Action::Toggle, 'Y', kGameChord});
+        } else if (r.action == Action::CycleMode) {
+            expected.push_back({Action::CycleMode, 'T', kGameChord});
         }
     }
+    std::sort(expected.begin(), expected.end());
     if (sightsBound) ++Listed("sights-key").seen;
+    ++Listed("chords").seen;
     const std::vector<Registration> actual = ImportHotkeys(i.cfg);
     if (expected != actual) {
         Fail(name, "comparison 1: hotkeys " + Describe(actual) +
@@ -488,7 +501,7 @@ Startup FromImport(const std::string& name, const legacy::Config& c, const std::
     const bool cycleKept = KeyAfterN1(name, c.positionToggleKey, "PositionToggleKey", dropped);
     const bool yawKept = KeyAfterN1(name, c.yawModeKey, "YawModeKey", dropped);
     for (const Registration& r : ImportHotkeys(c)) {
-        const bool kept = r.modifiers == kChord || (r.action == Action::Toggle && toggleKept) ||
+        const bool kept = r.modifiers == kGameChord || (r.action == Action::Toggle && toggleKept) ||
                           (r.action == Action::CycleMode && cycleKept) || (r.action == Action::YawMode && yawKept);
         if (kept) s.hotkeys.push_back(r);
     }
@@ -640,16 +653,15 @@ std::string Values(const Config& c) {
 
 using Concept = cfg::schema::Concept;
 
-// Every row the table binds, each of which follows Defaults.ini.
+// Every row the table binds that follows Defaults.ini. The four hotkey rows are the game's own
+// (per_game) and do not: a legacy key is written to them as a value whatever it was.
 const std::set<Concept>& AllRows() {
     static const std::set<Concept> all = {
         Concept::UdpPort,           Concept::EnableOnStartup,      Concept::WorldSpaceYaw,
         Concept::RotationEnabled,   Concept::LocalSmoothing,       Concept::RemoteSmoothing,
         Concept::PositionEnabled,   Concept::PositionLimitX,       Concept::PositionLimitY,
         Concept::PositionLimitYDown, Concept::PositionLimitZ,      Concept::PositionLimitZBack,
-        Concept::ToggleKey,         Concept::CycleTrackingModeKey, Concept::YawModeKey,
         Concept::LightMultiplier,   Concept::TrueFreeLook,         Concept::FreeLookMarker,
-        Concept::TrueFreeLookKey,
     };
     return all;
 }
@@ -682,10 +694,6 @@ std::set<Concept> UntouchedRows(const Startup& imported, const Startup& none) {
     row(imported.limit_y_down == none.limit_y_down, Concept::PositionLimitYDown);
     row(imported.limit_z == none.limit_z, Concept::PositionLimitZ);
     row(imported.limit_z_back == none.limit_z_back, Concept::PositionLimitZBack);
-    row(KeysOf(imported.hotkeys, Action::Toggle) == KeysOf(none.hotkeys, Action::Toggle), Concept::ToggleKey);
-    row(KeysOf(imported.hotkeys, Action::CycleMode) == KeysOf(none.hotkeys, Action::CycleMode),
-        Concept::CycleTrackingModeKey);
-    row(KeysOf(imported.hotkeys, Action::YawMode) == KeysOf(none.hotkeys, Action::YawMode), Concept::YawModeKey);
     std::set<Concept> untouched;
     for (const Concept c : AllRows()) {
         if (!changed.count(c)) untouched.insert(c);
@@ -1040,6 +1048,10 @@ void TestRegistrationModel() {
         }
         if (BindingFires(KeyModifiers::kCtrl | KeyModifiers::kShift, mods) != chordHeld) {
             Fail("registration", "a Ctrl+Shift key does not fire as ChordGuarded did, held " + std::to_string(held));
+        }
+        const bool gameChordHeld = cameraunlock::input::HasModifiers(mods, KeyModifiers::kShift | KeyModifiers::kAlt);
+        if (BindingFires(KeyModifiers::kShift | KeyModifiers::kAlt, mods) != gameChordHeld) {
+            Fail("registration", "a Shift+Alt key does not fire exactly while both are held, held " + std::to_string(held));
         }
     }
 }

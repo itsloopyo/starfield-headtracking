@@ -46,7 +46,7 @@ set "MOD_SEED_FILES="
 :: omit the field. Bump alongside vendor/ via `pixi run update-deps`.
 set "ASI_LOADER_VERSION=9.7.2"
 :: Post-install help text. `&echo ` starts each further line.
-set "MOD_CONTROLS=Controls (nav cluster / chord):&echo   End       / Ctrl+Shift+Y  Toggle tracking&echo   Page Up   / Ctrl+Shift+G  Cycle tracking mode&echo   Page Down / Ctrl+Shift+H  Toggle world/local yaw&echo   Insert    / Ctrl+Shift+U  Cycle aim mode"
+set "MOD_CONTROLS=Controls (nav cluster / chord):&echo   End       / Shift+Alt+Y  Toggle tracking&echo   Page Up   / Shift+Alt+T  Cycle tracking mode&echo   Page Down                Toggle world/local yaw&echo   Insert    / Shift+Alt+U  Cycle aim mode"
 :: --- END CONFIG BLOCK ---
 
 :: Pin delayed expansion off before `%*` is expanded on the `call` below.

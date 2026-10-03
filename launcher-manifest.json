@@ -30,7 +30,10 @@
                    "legacy_source":  "HeadTracking.ini",
                    "canonical_since":  "0.1.0",
                    "per_game":  {
-
-                                }
+                                  "ToggleKey": "End, Shift+Alt+Y",
+                                  "CycleTrackingModeKey": "PageUp, Shift+Alt+T",
+                                  "YawModeKey": "PageDown",
+                                  "TrueFreeLookKey": "Insert, Shift+Alt+U"
+                   }
                }
 }
