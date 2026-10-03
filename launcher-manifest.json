@@ -1,30 +1,36 @@
 {
-  "schema_version": 2,
-  "mod_info": {
-    "name": "StarfieldHeadTracking",
-    "version": "0.1.0",
-    "game_id": "starfield"
-  },
-  "strategy": "AsiLoader",
-  "delivery_mode": "manifest",
-  "files": [
-    {
-      "source": "vendor/ultimate-asi-loader/dinput8.dll",
-      "target": "winmm.dll",
-      "backup": true
-    },
-    {
-      "source": "plugins/StarfieldHeadTracking.asi",
-      "target": "StarfieldHeadTracking.asi"
-    }
-  ],
-  "runtime_requirements": [],
-  "dependencies": [],
-  "config": {
-    "path": "CameraUnlock.ini",
-    "anchor": "game_root",
-    "legacy_source": "HeadTracking.ini",
-    "canonical_since": "0.1.0",
-    "per_game": {}
-  }
+    "schema_version":  2,
+    "mod_info":  {
+                     "name":  "StarfieldHeadTracking",
+                     "version":  "0.1.1",
+                     "game_id":  "starfield"
+                 },
+    "strategy":  "AsiLoader",
+    "delivery_mode":  "manifest",
+    "files":  [
+                  {
+                      "source":  "vendor/ultimate-asi-loader/dinput8.dll",
+                      "target":  "winmm.dll",
+                      "backup":  true
+                  },
+                  {
+                      "source":  "plugins/StarfieldHeadTracking.asi",
+                      "target":  "StarfieldHeadTracking.asi"
+                  }
+              ],
+    "runtime_requirements":  [
+
+                             ],
+    "dependencies":  [
+
+                     ],
+    "config":  {
+                   "path":  "CameraUnlock.ini",
+                   "anchor":  "game_root",
+                   "legacy_source":  "HeadTracking.ini",
+                   "canonical_since":  "0.1.0",
+                   "per_game":  {
+
+                                }
+               }
 }
