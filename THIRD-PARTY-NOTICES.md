@@ -23,7 +23,7 @@ file is added.
 | Zydis | v4.1.1 | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | Zycore | `0b2432ced0884fd152b471d97ecf0258ff4d859f` | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | inih | r55, modified | BSD-3-Clause | Compiled into `StarfieldHeadTracking.asi` |
-| cameraunlock-core | 0aa038ea36c4117e42f1feed1bad583a95f38605 | MIT | Compiled into `StarfieldHeadTracking.asi` |
+| cameraunlock-core | 3d21d93f80bc4aa9b87b7ea043c2b2d95ac19661 | MIT | Compiled into `StarfieldHeadTracking.asi` |
 | OpenTrack | n/a | ISC | Not bundled; UDP protocol interoperability only |
 | CommonLibSF | n/a | GPL-3.0-or-later | Neither bundled nor linked; consulted on two struct layouts, see below |
 | Xbox GDK / Creation Engine 2 / Scaleform GFx | n/a | n/a | Neither bundled nor linked; see "Engine layout" below |
@@ -338,7 +338,7 @@ right. It ships as `licenses/cameraunlock-core-LICENSE.txt` in both release
 ZIPs and is reproduced here as well.
 
 - **Upstream:** https://github.com/itsloopyo/cameraunlock-core
-- **Version:** pinned commit `0aa038ea36c4117e42f1feed1bad583a95f38605`
+- **Version:** pinned commit `3d21d93f80bc4aa9b87b7ea043c2b2d95ac19661`
 - **License:** MIT
 - **Usage:** supplies the shared tracker receiver, pose interpolation,
   smoothing and camera maths.
