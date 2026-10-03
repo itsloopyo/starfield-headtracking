@@ -61,3 +61,6 @@ NEXUS_MODS.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Lab build tree
+build-lab/

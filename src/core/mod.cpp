@@ -13,6 +13,9 @@
 #include <cameraunlock/tracking/tracking_mode.h>
 
 namespace StarfieldHT {
+#if STARFIELDHT_DEV_HOTKEYS
+void StartIsolatedInputIfAsked();
+#endif
 
 namespace {
 
@@ -278,6 +281,9 @@ bool Mod::InitializeHooks() {
     //
     // Losing the hotkeys is worth saying and not worth refusing to run over:
     // tracking still works and the config still decides what it starts as.
+#if STARFIELDHT_DEV_HOTKEYS
+    StartIsolatedInputIfAsked();
+#endif
     if (!InstallInputHook()) {
         m_inputHookInstalled = false;
         Logger::Instance().Warning(

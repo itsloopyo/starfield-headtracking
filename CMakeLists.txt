@@ -101,7 +101,7 @@ target_link_libraries(StarfieldHeadTracking PRIVATE cameraunlock starfieldht_dis
 
 option(STARFIELDHT_DEV_HOTKEYS "Build the diagnostic hotkeys (developer aid, not for release)" OFF)
 if(STARFIELDHT_DEV_HOTKEYS)
-    target_sources(StarfieldHeadTracking PRIVATE src/core/access_probe.cpp src/core/object_finder.cpp src/game/hud_probe.cpp)
+    target_sources(StarfieldHeadTracking PRIVATE src/core/access_probe.cpp src/core/object_finder.cpp src/game/hud_probe.cpp src/core/isolated_input.cpp)
     target_compile_definitions(StarfieldHeadTracking PRIVATE STARFIELDHT_DEV_HOTKEYS=1)
     message(WARNING "STARFIELDHT_DEV_HOTKEYS is ON. This build registers F8 to cycle "
                     "rotation-axis isolation and Insert to dump the camera matrices "
