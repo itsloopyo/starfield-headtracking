@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <initializer_list>
+#include <limits>
 
 #include "core/constants.h"
 #include "core/config.h"
@@ -136,6 +137,76 @@ void ZoomLeavesTheLeanAlongTheAimWhole() {
     }
 }
 
+// With the sights up the eye stops short of the rear sight, and nothing else
+// about the lean changes: the stop cuts the part along the aim alone, whatever
+// the zoom, and at the hip the whole of PositionLimitZ is applied.
+void LeaningInStopsOnlyAtTheRearSight() {
+    const float kNear = 0.05f;
+    // The Eon pistol's rear sight, read from its sight node with the sights up.
+    const float kSightDepth = 0.394f;
+    const float stop = StarfieldHT::ForwardStopForSight(kSightDepth, kNear);
+    CheckNear(stop, kSightDepth - kNear - StarfieldHT::kSightStopMargin,
+              "the stop is the rear sight less the near plane and the margin");
+    CheckNear(StarfieldHT::ForwardStopForSight(0.03f, kNear), 0.0f,
+              "a sight inside the near plane never pulls the eye back");
+    Check(std::isinf(StarfieldHT::ForwardStopForSight(std::numeric_limits<float>::infinity(), kNear)),
+          "a weapon whose sight is not known has no stop");
+
+    const StarfieldHT::Config defaults;
+    const StarfieldHT::NiPoint3 lean = SaturatedLean(defaults, 1.0f, 1.0f, -1.0f);
+    const float forward[3] = {0.0f, 1.0f, 0.0f}, up[3] = {0.0f, 0.0f, 1.0f}, right[3] = {1.0f, 0.0f, 0.0f};
+    for (const float zoom : {1.0f, 0.5f, 0.25f}) {
+        const auto leanAt = [&](cameraunlock::ads::LeanHandover& handover, bool aiming, float forwardStop,
+                                unsigned long long nowMs, float out[3]) {
+            for (int i = 0; i < 3; ++i) {
+                out[i] = Forward(lean) * forward[i] + Up(lean) * up[i] + Right(lean) * right[i];
+            }
+            StarfieldHT::ScaleLeanForZoom(out, forward, zoom);
+            StarfieldHT::HoldLeanBehindSight(out, forward, handover, forwardStop, aiming, nowMs);
+        };
+        float world[3];
+
+        cameraunlock::ads::LeanHandover hip;
+        leanAt(hip, false, stop, 1000, world);
+        CheckNear(StarfieldHT::Dot3(world, forward), 0.40f * StarfieldHT::UNITS_PER_METER,
+                  "at the hip a forward lean of PositionLimitZ is applied in full, whatever the stop");
+
+        cameraunlock::ads::LeanHandover sights;
+        leanAt(sights, false, stop, 1000, world);
+        leanAt(sights, true, stop, 1001, world);
+        const float justRaised = StarfieldHT::Dot3(world, forward);
+        Check(justRaised > 0.39f, "raising the sights does not step the eye back to the stop");
+        leanAt(sights, true, stop, 1100, world);
+        const float midway = StarfieldHT::Dot3(world, forward);
+        Check(midway < justRaised && midway > stop, "the stop eases in as the sights come up");
+        leanAt(sights, true, stop, 3000, world);
+        CheckNear(StarfieldHT::Dot3(world, forward), stop,
+                  "with the sights up the forward lean is cut at the rear sight stop, at any zoom");
+        CheckNear(StarfieldHT::Dot3(world, right), Right(lean) * zoom,
+                  "the stop leaves the sideways lean on the camera");
+        CheckNear(StarfieldHT::Dot3(world, up), Up(lean) * zoom, "the stop leaves the vertical lean on the camera");
+
+        leanAt(sights, false, stop, 3001, world);
+        Check(StarfieldHT::Dot3(world, forward) < stop + 0.01f, "lowering the sights does not step the eye forward");
+        leanAt(sights, false, stop, 6000, world);
+        CheckNear(StarfieldHT::Dot3(world, forward), 0.40f * StarfieldHT::UNITS_PER_METER,
+                  "with the sights back down the forward lean is whole again");
+
+        cameraunlock::ads::LeanHandover unknown;
+        leanAt(unknown, true, std::numeric_limits<float>::infinity(), 1000, world);
+        leanAt(unknown, true, std::numeric_limits<float>::infinity(), 3000, world);
+        CheckNear(StarfieldHT::Dot3(world, forward), 0.40f * StarfieldHT::UNITS_PER_METER,
+                  "with no stop known the forward lean is whole with the sights up");
+    }
+
+    // Leaning back is never touched by the stop.
+    cameraunlock::ads::LeanHandover back;
+    float behind[3] = {0.0f, -0.10f, 0.0f};
+    StarfieldHT::HoldLeanBehindSight(behind, forward, back, stop, true, 1000);
+    StarfieldHT::HoldLeanBehindSight(behind, forward, back, stop, true, 3000);
+    CheckNear(StarfieldHT::Dot3(behind, forward), -0.10f, "leaning back with the sights up is left alone");
+}
+
 } // namespace
 
 int main() {
@@ -144,6 +215,7 @@ int main() {
     LeanBudgetsAreNotReversed();
     VerticalBudgetsAreTheirOwn();
     ZoomLeavesTheLeanAlongTheAimWhole();
+    LeaningInStopsOnlyAtTheRearSight();
 
     if (g_failures != 0) {
         std::printf("%d check(s) failed\n", g_failures);

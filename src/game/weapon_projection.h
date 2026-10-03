@@ -8,8 +8,8 @@
 namespace StarfieldHT {
 
 inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBasis& drawn,
-                                      float scaleX, float scaleY, float cleanEyeShare, float eye[3],
-                                      NiMatrix44& view, NiMatrix44& inverseView) {
+                                      float scaleX, float scaleY, float cleanEyeShare, float sightsUp,
+                                      float eye[3], NiMatrix44& view, NiMatrix44& inverseView) {
     Mat3 stretch{}, inverseStretch{}, drawnView{};
     for (int i = 0; i < 3; ++i) {
         drawnView.m[i][0] = drawn.r[i];
@@ -44,7 +44,19 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
     // from the tracked eye and keeps that parallax: the weapon stays put in the
     // world and the head moves around it. cleanEyeShare is 1 in sights locked
     // and 0 in the free look modes, and between the two while the mode slides.
-    for (int i = 0; i < 3; ++i) eye[i] = drawn.e[i] + (clean.e[i] - drawn.e[i]) * cleanEyeShare;
+    //
+    // With the sights up the part of the lean along the aim is kept in every
+    // mode: the eye moves along the sight line, which leaves it on the sights,
+    // so the weapon stays put and leaning in brings the sights closer. At the hip
+    // the weapon comes with the eye along the aim as well, where a forward lean
+    // would otherwise carry the eye over the top of it. sightsUp is 0 at the hip
+    // and 1 with the sights fully up.
+    float lean[3];
+    for (int i = 0; i < 3; ++i) lean[i] = drawn.e[i] - clean.e[i];
+    const float along = Dot3(lean, clean.f) * sightsUp;
+    for (int i = 0; i < 3; ++i) {
+        eye[i] = drawn.e[i] - (lean[i] - clean.f[i] * along) * cleanEyeShare;
+    }
 }
 
 inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weaponRight, float weaponTop,

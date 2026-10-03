@@ -12,11 +12,13 @@
 #include "game/game_state.h"
 #include "game/helmet_light.h"
 #include "game/scene_layout.h"
+#include "game/sight_depth.h"
 #include "game/starfield_types.h"
 #include "camera_boundary.h"
 #include "ui/aim_marker.h"
 
 #include <cameraunlock/ads/ads_fade.h>
+#include <cameraunlock/ads/lean_handover.h>
 #include <cameraunlock/camera/zoom_compensation.h>
 #include <cameraunlock/memory/pattern_scanner.h>
 #include <cameraunlock/memory/safe_memory.h>
@@ -64,8 +66,11 @@ RelativeAimPoint g_relativeAimPoint = nullptr;
 std::atomic<uintptr_t> g_liveCamera{0};
 
 CameraFrameHistory g_frames;
-// Follows the sights, for the aim marker: 1 at the hip, 0 with them fully up.
+// Follows the sights, for the aim marker and the weapon's eye: 1 at the hip, 0
+// with them fully up.
 cameraunlock::ads::AdsFade g_sightsFade;
+// Holds the lean short of the rear sight while the sights are up.
+cameraunlock::ads::LeanHandover g_sightStop;
 
 bool SameMatrix(const NiMatrix44& a, const NiMatrix44& b) {
     return std::memcmp(&a, &b, sizeof(NiMatrix44)) == 0;
@@ -226,7 +231,7 @@ void AbandonFrame() {
 void LogApplyState(bool active, bool haveRotation, bool havePosition,
                    float yaw, float pitch, float roll,
                    const CameraBasis& clean, const CameraBasis& drawn,
-                   const NiFrustum& frustum, float zoom, float sightsUp) {
+                   const NiFrustum& frustum, float zoom, float sightsUp, float forwardStop) {
     // Silent while nothing is tracked, so a session spent in menus writes
     // nothing, but the frame tracking stops is still recorded.
     static uint64_t s_lastMs = 0;
@@ -243,12 +248,12 @@ void LogApplyState(bool active, bool haveRotation, bool havePosition,
     Logger::Instance().Info(
         "apply: active=%d rot=%d pos=%d pose(%+.2f,%+.2f,%+.2f) turned %.2f deg "
         "lean(%+.2f,%+.2f,%+.2f) cleanFwd(%+.3f,%+.3f,%+.3f) drawnFwd(%+.3f,%+.3f,%+.3f) "
-        "frustum r=%.4f t=%.4f zoom %.4f leanForward %+.3f sights %.2f",
+        "frustum r=%.4f t=%.4f zoom %.4f leanForward %+.3f sights %.2f forwardStop %.3f",
         active, haveRotation, havePosition, yaw, pitch, roll,
         acosf(cosAngle > 1.0f ? 1.0f : (cosAngle < -1.0f ? -1.0f : cosAngle)) * RAD_TO_DEG,
         lean[0], lean[1], lean[2],
         clean.f[0], clean.f[1], clean.f[2], drawn.f[0], drawn.f[1], drawn.f[2],
-        frustum.right, frustum.top, zoom, Dot3(lean, clean.f), sightsUp);
+        frustum.right, frustum.top, zoom, Dot3(lean, clean.f), sightsUp, forwardStop);
 }
 
 // The three pieces of the camera node this hook works from, read in one go so a
@@ -349,6 +354,7 @@ void ReleaseTracking(uintptr_t niCamera, uintptr_t localOffset, const NiMatrix44
     }
     g_local.have = false;
     g_sightsFade.Reset();
+    g_sightStop.Stop();
     ReleaseHelmetLight();
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
     PublishNoFrame();
@@ -378,12 +384,18 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
 
     if (!pose.haveRotation && !pose.havePosition) {
         LogApplyState(active, false, false, 0.0f, 0.0f, 0.0f, cleanBasis, cleanBasis,
-                      readout.frustum, pose.zoom, 0.0f);
+                      readout.frustum, pose.zoom, 0.0f, std::numeric_limits<float>::infinity());
         ReleaseTracking(niCamera, layout.localTransformOffset, pristine, ourWriteStood);
         return;
     }
 
-    const float sightsUp = 1.0f - g_sightsFade.Update(AdsState::IsAiming(), GetTickCount64());
+    const uint64_t now = GetTickCount64();
+    const bool aiming = AdsState::IsAiming();
+    const float sightsUp = 1.0f - g_sightsFade.Update(aiming, now);
+    // Kept while the sights are still coming down, so the stop eases out with
+    // them rather than letting go the frame the button is released.
+    SightDepth::Update(cleanBasis, aiming || sightsUp > 0.0f);
+    const float forwardStop = ForwardStopForSight(SightDepth::Get(), readout.frustum.nearPlane);
 
     CameraBasis drawn = cleanBasis;
     if (pose.haveRotation) {
@@ -405,7 +417,10 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
                          + lean.z * leanBasis.r[i];
         }
         ScaleLeanForZoom(leanWorld, cleanBasis.f, pose.zoom);
+        HoldLeanBehindSight(leanWorld, cleanBasis.f, g_sightStop, forwardStop, aiming, now);
         for (int i = 0; i < 3; ++i) drawn.e[i] = cleanBasis.e[i] + leanWorld[i];
+    } else {
+        g_sightStop.Stop();
     }
 
     const NiMatrix44 newLocal = BuildTrackedLocal(pristine, Transpose(rootRot), drawn,
@@ -433,7 +448,7 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     g_cleanWorld.Publish(niCamera, layout.worldTransformOffset, cleanWorld);
 
     LogApplyState(active, pose.haveRotation, pose.havePosition, pose.yaw, pose.pitch, pose.roll,
-                  cleanBasis, drawn, readout.frustum, pose.zoom, sightsUp);
+                  cleanBasis, drawn, readout.frustum, pose.zoom, sightsUp, forwardStop);
 }
 
 // The structured-exception frame is kept in a function of its own so the work

@@ -3,7 +3,10 @@
 #include "core/constants.h"
 #include "game/camera_math.h"
 
+#include <cameraunlock/ads/lean_handover.h>
 #include <cameraunlock/camera/zoom_compensation.h>
+
+#include <limits>
 
 namespace StarfieldHT {
 
@@ -53,6 +56,39 @@ inline void ScaleLeanForZoom(float lean[3], const float aim[3], float zoom) {
     lean[0] = scaled.x;
     lean[1] = scaled.y;
     lean[2] = scaled.z;
+}
+
+// How far short of the rear sight the eye is held while the sights are up,
+// beyond the near clip distance that would otherwise cut the sight in half.
+inline constexpr float kSightStopMargin = 0.015f;
+
+// How far along the aim a lean may take the eye with the sights up, from how far
+// in front of the eye the rear sight sits. Never negative: a sight already
+// inside that distance is where the game put it, and the eye is not pulled back
+// from where the game put the eye. Infinity in, for a weapon whose sight is not
+// known, is infinity out, which is no stop.
+inline float ForwardStopForSight(float sightDepth, float nearPlane) {
+    const float stop = sightDepth - nearPlane - kSightStopMargin;
+    return stop > 0.0f ? stop : 0.0f;
+}
+
+// Holds a world-space lean short of the rear sight while the sights are up, and
+// leaves it whole at the hip. Only the part along the clean aim is cut, and it
+// eases in and out with the sights.
+//
+// The hand-over is asked for the free look split in every mode: here the camera
+// keeps the lean across the aim whichever mode is on, because the weapon pass,
+// and no rig, is what keeps the sights on the eye in sights locked.
+inline void HoldLeanBehindSight(float lean[3], const float aim[3],
+                                cameraunlock::ads::LeanHandover& handover, float forwardStop,
+                                bool aiming, unsigned long long nowMs) {
+    using cameraunlock::math::Vec3;
+    handover.SetForwardStop(forwardStop);
+    const Vec3 held = handover.Update(Vec3(lean[0], lean[1], lean[2]), Vec3(aim[0], aim[1], aim[2]),
+                                      aiming, true, false, nowMs).camera;
+    lean[0] = held.x;
+    lean[1] = held.y;
+    lean[2] = held.z;
 }
 
 // The camera's basis with its pitch and roll taken out: forward flattened onto

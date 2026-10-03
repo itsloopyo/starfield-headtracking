@@ -32,16 +32,37 @@ int main() {
                     for (int i = 0; i < 3; ++i) axis[i] = drawn.f[i];
                     RotateBasis(drawn, axis, angle * 0.7f);
                     for (int i = 0; i < 3; ++i) drawn.e[i] += lean * (clean.r[i] + clean.u[i] + clean.f[i]);
-                    // Sights locked draws the weapon from the clean eye under any lean;
-                    // true free look from the tracked eye, with the same rotation.
+                    // Sights locked draws the weapon from the clean eye under any lean
+                    // at the hip; true free look from the tracked eye, with the same
+                    // rotation, sights up or down.
                     float freeEye[3];
                     NiMatrix44 freeView{}, freeInverse{};
-                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 0.0f, freeEye, freeView, freeInverse);
-                    for (int i = 0; i < 3; ++i) Near(freeEye[i], drawn.e[i], "true free look draws from the tracked eye");
+                    for (const float sightsUp : {0.0f, 0.5f, 1.0f}) {
+                        CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 0.0f, sightsUp, freeEye, freeView, freeInverse);
+                        for (int i = 0; i < 3; ++i) Near(freeEye[i], drawn.e[i], "true free look draws from the tracked eye");
+                    }
                     float eye[3];
                     NiMatrix44 view{}, inverse{};
-                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 1.0f, eye, view, inverse);
-                    for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "sights locked draws from the clean eye");
+                    // Sights up, sights locked keeps the lean along the aim and takes
+                    // out the rest, so leaning in brings the sights closer while the
+                    // eye stays on the sight line.
+                    NiMatrix44 upView{}, upInverse{};
+                    for (const float sightsUp : {0.5f, 1.0f}) {
+                        CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 1.0f, sightsUp, eye, upView, upInverse);
+                        float fromClean[3];
+                        for (int i = 0; i < 3; ++i) fromClean[i] = eye[i] - clean.e[i];
+                        Near(Dot3(fromClean, clean.f), lean * sightsUp,
+                             "sights locked, sights up: the weapon's eye keeps the lean along the aim");
+                        Near(Dot3(fromClean, clean.r), 0.0f, "sights locked, sights up: no sideways lean reaches the weapon's eye");
+                        Near(Dot3(fromClean, clean.u), 0.0f, "sights locked, sights up: no vertical lean reaches the weapon's eye");
+                    }
+                    CompensateWeaponProjection(clean, drawn, scaleX, scaleY, 1.0f, 0.0f, eye, view, inverse);
+                    for (int i = 0; i < 3; ++i) Near(eye[i], clean.e[i], "sights locked draws from the clean eye at the hip");
+                    for (int i = 0; i < 4; ++i) {
+                        for (int j = 0; j < 4; ++j) {
+                            Near(upView.entry[i][j], view.entry[i][j], "raising the sights leaves the weapon view rotation alone");
+                        }
+                    }
                     for (int i = 0; i < 4; ++i) {
                         for (int j = 0; j < 4; ++j) {
                             Near(freeView.entry[i][j], view.entry[i][j], "true free look keeps the weapon view rotation");
@@ -110,7 +131,7 @@ int main() {
             float eye[3];
             NiMatrix44 view{}, inverse{};
             CompensateWeaponProjection(clean, frame.drawn,
-                frame.frustumRight / weaponRight, frame.frustumTop / weaponTop, 1.0f, eye, view, inverse);
+                frame.frustumRight / weaponRight, frame.frustumTop / weaponTop, 1.0f, 0.0f, eye, view, inverse);
             if (!AlignWeaponAim(frame, distance, weaponRight, weaponTop, 1.0f, view, inverse)) {
                 std::printf("FAIL: finite target alignment rejected\n");
                 ++failures;
@@ -159,7 +180,7 @@ int main() {
         const auto eyeOffset = [&](float cleanEyeShare) {
             float eye[3];
             NiMatrix44 view{}, inverse{};
-            CompensateWeaponProjection(clean, drawn, 1.0f, 1.0f, cleanEyeShare, eye, view, inverse);
+            CompensateWeaponProjection(clean, drawn, 1.0f, 1.0f, cleanEyeShare, 1.0f, eye, view, inverse);
             const float offset[3] = {eye[0] - clean.e[0], eye[1] - clean.e[1], eye[2] - clean.e[2]};
             return Dot3(offset, clean.r);
         };

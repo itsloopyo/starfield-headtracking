@@ -26,6 +26,9 @@ All notable changes to this project are documented here. The format follows
   jumping. The mode is saved to `CameraUnlock.ini` as `[Position] TrueFreeLook`
   and `[Position] FreeLookMarker` when you change it, and its keys are
   `[Hotkeys] TrueFreeLookKey`.
+- With the sights up, leaning in brings the sights closer in every aim mode,
+  and stops just short of the weapon's rear sight. In sights locked the weapon
+  used to sit a fixed distance from your face however far you leaned in.
 - Leaning in is no longer scaled down by a zoom. Through a scope or sights the
   forward lean reaches the same `PositionLimitZ` as at the hip. Leaning
   sideways or up and down is still scaled to the zoom, so a scope does not

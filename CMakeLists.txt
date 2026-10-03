@@ -66,6 +66,7 @@ set(MOD_SOURCES
     src/hooks/weapon_hook.cpp
     src/game/build_profile.cpp
     src/game/ads_state.cpp
+    src/game/sight_depth.cpp
     src/game/base_fov.cpp
     src/game/helmet_light.cpp
     src/hooks/input_hook.cpp

@@ -149,7 +149,7 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             NiMatrix44 view{}, inverse{};
             const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsTrueFreeLook(), NowMs());
             CompensateWeaponProjection(frame.clean, drawn, worldRight / frustum[1], worldTop / frustum[2],
-                                      cleanEyeShare, adjusted, view, inverse);
+                                      cleanEyeShare, frame.sightsUp, adjusted, view, inverse);
             if (cleanEyeShare > 0.0f) {
                 CameraFrame aimFrame = frame;
                 aimFrame.drawn = drawn;
