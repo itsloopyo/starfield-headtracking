@@ -123,8 +123,10 @@ void Mod::ApplyPositionSettings() {
     m_session.SetLocalSmoothing(m_config.local_smoothing);
     m_session.SetRemoteSmoothing(m_config.remote_smoothing);
 
-    m_trueFreeLook.store(m_config.true_free_look);
-    Logger::Instance().Info("Aiming down sights: %s", m_config.true_free_look ? "true free look" : "sights locked");
+    const cameraunlock::ads::AimMode aimMode =
+        cameraunlock::ads::DecodeAimMode(m_config.true_free_look, m_config.free_look_marker);
+    m_aimMode.store(aimMode);
+    Logger::Instance().Info("%s", cameraunlock::ads::AimModeLabel(aimMode));
 
     const cameraunlock::TrackingMode mode = m_session.GetMode();
     Logger::Instance().Info("Position processor initialized (%s, limits x=%.2f up=%.2f down=%.2f forward=%.2f back=%.2f)",
@@ -162,7 +164,7 @@ void Mod::AnnounceStartup() {
     // Every binding, not just the toggle. The nav-cluster keys are unlabelled
     // in game and the log is the only place a user can read back what this
     // build is bound to.
-    Logger::Instance().Info("Hotkeys: toggle=[%s] cycle tracking mode=[%s] yaw mode=[%s] true free look=[%s]",
+    Logger::Instance().Info("Hotkeys: toggle=[%s] cycle tracking mode=[%s] yaw mode=[%s] cycle aim mode=[%s]",
                             m_config.toggle_key_name.c_str(),
                             m_config.cycle_tracking_mode_key_name.c_str(),
                             m_config.yaw_mode_key_name.c_str(),
@@ -368,11 +370,15 @@ void Mod::ToggleYawMode() {
     SaveToggle([worldSpace](Config& c) { c.world_space_yaw = worldSpace; });
 }
 
-void Mod::ToggleTrueFreeLook() {
-    const bool freeLook = !m_trueFreeLook.load();
-    m_trueFreeLook.store(freeLook);
-    AnnounceMode("True free look", freeLook ? "ON" : "OFF (sights locked)");
-    SaveToggle([freeLook](Config& c) { c.true_free_look = freeLook; });
+void Mod::CycleAimMode() {
+    const cameraunlock::ads::AimMode mode = cameraunlock::ads::NextAimMode(m_aimMode.load());
+    m_aimMode.store(mode);
+    Logger::Instance().Info("%s", cameraunlock::ads::AimModeLabel(mode));
+    const cameraunlock::ads::AimModePair pair = cameraunlock::ads::EncodeAimMode(mode);
+    SaveToggle([pair](Config& c) {
+        c.true_free_look = pair.trueFreeLook;
+        c.free_look_marker = pair.freeLookMarker;
+    });
 }
 
 void Mod::LogTrackerConnection() {

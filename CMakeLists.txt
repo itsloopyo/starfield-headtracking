@@ -65,11 +65,13 @@ set(MOD_SOURCES
     src/hooks/aim_hook.cpp
     src/hooks/weapon_hook.cpp
     src/game/build_profile.cpp
+    src/game/ads_state.cpp
     src/game/base_fov.cpp
     src/game/helmet_light.cpp
     src/hooks/input_hook.cpp
     src/game/game_state.cpp
     src/game/scene_layout.cpp
+    src/ui/aim_marker.cpp
     src/ui/stock_reticle.cpp
 )
 
@@ -115,9 +117,8 @@ target_include_directories(StarfieldHeadTracking PRIVATE
 
 # Windows libraries. psapi is here because cameraunlock's crash handler and
 # pattern scanner call EnumProcessModules and GetModuleInformation and core does
-# not link it itself. ws2_32 arrives transitively from cameraunlock; the D3D,
-# shell and version libraries were left over from an overlay path this mod does
-# not have.
+# not link it itself. ws2_32 arrives transitively from cameraunlock, and the
+# aim marker's overlay names its own D3D libraries.
 if(WIN32)
     target_link_libraries(StarfieldHeadTracking PRIVATE psapi)
 endif()
@@ -154,7 +155,10 @@ if(STARFIELDHT_BUILD_TESTS)
     target_include_directories(starfieldht_camera_frame_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME camera_frame_history COMMAND starfieldht_camera_frame_tests)
     add_executable(starfieldht_head_rotation_tests tests/head_rotation_tests.cpp)
-    target_include_directories(starfieldht_head_rotation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(starfieldht_head_rotation_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/cameraunlock-core/cpp/include
+    )
     add_test(NAME head_rotation COMMAND starfieldht_head_rotation_tests)
     add_executable(starfieldht_head_attached_tests tests/head_attached_tests.cpp)
     target_include_directories(starfieldht_head_attached_tests PRIVATE

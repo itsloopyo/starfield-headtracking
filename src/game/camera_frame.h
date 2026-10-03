@@ -16,6 +16,8 @@ struct CameraFrame {
     float frustumTop;
     float frustumNear;
     NiMatrix44 local;
+    // 0 at the hip, 1 with the sights fully up.
+    float sightsUp;
 };
 
 inline CameraFrame RebaseCameraFrame(const CameraFrame& reference, const CameraBasis& drawn) {

@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <initializer_list>
 
 #include "core/constants.h"
 #include "core/config.h"
@@ -102,6 +103,39 @@ void VerticalBudgetsAreTheirOwn() {
               "ducking gets PositionLimitYDown");
 }
 
+// A zoom scales the lean across the aim and leaves the lean along it whole, so
+// leaning in reaches PositionLimitZ at the hip and through any scope. Checked
+// with the aim level and with it pitched, where a horizon-locked lean is no
+// longer along the camera's own axes.
+void ZoomLeavesTheLeanAlongTheAimWhole() {
+    const StarfieldHT::Config defaults;
+    const StarfieldHT::NiPoint3 lean = SaturatedLean(defaults, 1.0f, 1.0f, -1.0f);
+    const float forward[3] = {0.0f, 1.0f, 0.0f}, up[3] = {0.0f, 0.0f, 1.0f}, right[3] = {1.0f, 0.0f, 0.0f};
+    for (const float zoom : {1.0f, 0.5f, 0.25f}) {
+        float world[3];
+        for (int i = 0; i < 3; ++i) {
+            world[i] = Forward(lean) * forward[i] + Up(lean) * up[i] + Right(lean) * right[i];
+        }
+        StarfieldHT::ScaleLeanForZoom(world, forward, zoom);
+        CheckNear(StarfieldHT::Dot3(world, forward), 0.40f * StarfieldHT::UNITS_PER_METER,
+                  "a forward lean of PositionLimitZ is applied in full at any zoom");
+        CheckNear(StarfieldHT::Dot3(world, right), Right(lean) * zoom, "the sideways lean scales with the zoom");
+        CheckNear(StarfieldHT::Dot3(world, up), Up(lean) * zoom, "the vertical lean scales with the zoom");
+
+        const float aim[3] = {0.0f, 0.8f, -0.6f}, across[3] = {0.0f, 0.6f, 0.8f};
+        float pitched[3];
+        for (int i = 0; i < 3; ++i) {
+            pitched[i] = Forward(lean) * forward[i] + Up(lean) * up[i] + Right(lean) * right[i];
+        }
+        const float along = StarfieldHT::Dot3(pitched, aim);
+        const float lateral = StarfieldHT::Dot3(pitched, across);
+        StarfieldHT::ScaleLeanForZoom(pitched, aim, zoom);
+        CheckNear(StarfieldHT::Dot3(pitched, aim), along, "with the aim pitched, the lean along it is still whole");
+        CheckNear(StarfieldHT::Dot3(pitched, across), lateral * zoom,
+                  "with the aim pitched, the lean across it scales with the zoom");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -109,6 +143,7 @@ int main() {
     UpIsNotInvertedAndLateralIs();
     LeanBudgetsAreNotReversed();
     VerticalBudgetsAreTheirOwn();
+    ZoomLeavesTheLeanAlongTheAimWhole();
 
     if (g_failures != 0) {
         std::printf("%d check(s) failed\n", g_failures);

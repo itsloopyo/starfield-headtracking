@@ -43,7 +43,7 @@ inline void CompensateWeaponProjection(const CameraBasis& clean, const CameraBas
     // frame and take the sights off the eye while aiming. True free look draws
     // from the tracked eye and keeps that parallax: the weapon stays put in the
     // world and the head moves around it. cleanEyeShare is 1 in sights locked
-    // and 0 in true free look, and between the two while the toggle slides.
+    // and 0 in the free look modes, and between the two while the mode slides.
     for (int i = 0; i < 3; ++i) eye[i] = drawn.e[i] + (clean.e[i] - drawn.e[i]) * cleanEyeShare;
 }
 
@@ -70,8 +70,8 @@ inline bool AlignWeaponAim(const CameraFrame& frame, float distance, float weapo
     return true;
 }
 
-// The toggle moves the weapon's eye by the whole lean, so it rides AdsFade
-// rather than stepping: 1 in sights locked, 0 in true free look.
+// The aim mode key moves the weapon's eye by the whole lean, so it rides AdsFade
+// rather than stepping: 1 in sights locked, 0 in the free look modes.
 class WeaponEye {
 public:
     float CleanEyeShare(bool trueFreeLook, unsigned long long nowMs) {

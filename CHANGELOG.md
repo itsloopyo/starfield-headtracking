@@ -16,13 +16,20 @@ All notable changes to this project are documented here. The format follows
   `CameraUnlock.ini`. `LightFollowsHead=false` leaves the helmet light on your
   aim, and `LightMultiplier` sets how far it turns relative to your head: `1.0`
   matches the view, `0` keeps it pointing along your aim.
-- True free look, toggled with Insert or Ctrl+Shift+U. By default leaning never
-  takes your eye off the sights: the weapon is drawn from your unleaned eye. In
-  true free look the weapon stays put and your head moves freely around it, so
-  to see down the sights you have to put your head behind them. Switching
-  slides the weapon over a fraction of a second instead of jumping. The mode is
-  saved to `CameraUnlock.ini` as `[Position] TrueFreeLook` when you toggle it,
-  and its keys are `[Hotkeys] TrueFreeLookKey`.
+- Three aim modes, cycled with Insert or Ctrl+Shift+U. Sights locked is the
+  default: leaning never takes your eye off the sights, because the weapon is
+  drawn from your unleaned eye. In free look with a marker the weapon stays put
+  and your head moves freely around it, and a small white marker shows where
+  your rounds will land while the sights are up. True free look is the same
+  with no marker, so to place a shot you have to put your head behind the
+  sights. Switching slides the weapon over a fraction of a second instead of
+  jumping. The mode is saved to `CameraUnlock.ini` as `[Position] TrueFreeLook`
+  and `[Position] FreeLookMarker` when you change it, and its keys are
+  `[Hotkeys] TrueFreeLookKey`.
+- Leaning in is no longer scaled down by a zoom. Through a scope or sights the
+  forward lean reaches the same `PositionLimitZ` as at the hip. Leaning
+  sideways or up and down is still scaled to the zoom, so a scope does not
+  magnify it.
 - A setting set to `default` in `CameraUnlock.ini` takes its value from
   `Defaults.ini`, which every head tracking mod that keeps its settings in
   `CameraUnlock.ini` reads. Head tracking mods that keep their settings in

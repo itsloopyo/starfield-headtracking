@@ -61,7 +61,7 @@ void RegisterBindings(const Config& config) {
     RegisterKeyBindings(g_poller, Parse(config.toggle_key_name), [] { Mod::Instance().Toggle(); });
     RegisterKeyBindings(g_poller, Parse(config.cycle_tracking_mode_key_name), [] { Mod::Instance().CycleDofMode(); });
     RegisterKeyBindings(g_poller, Parse(config.yaw_mode_key_name), [] { Mod::Instance().ToggleYawMode(); });
-    RegisterKeyBindings(g_poller, Parse(config.true_free_look_key_name), [] { Mod::Instance().ToggleTrueFreeLook(); });
+    RegisterKeyBindings(g_poller, Parse(config.true_free_look_key_name), [] { Mod::Instance().CycleAimMode(); });
 
 #if STARFIELDHT_DEV_HOTKEYS
     using cameraunlock::input::NavGuarded;

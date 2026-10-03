@@ -7,13 +7,16 @@
 #include "game/base_fov.h"
 #include "game/build_profile.h"
 #include "game/build_selection.h"
+#include "game/ads_state.h"
 #include "game/aim_projection.h"
 #include "game/game_state.h"
 #include "game/helmet_light.h"
 #include "game/scene_layout.h"
 #include "game/starfield_types.h"
 #include "camera_boundary.h"
+#include "ui/aim_marker.h"
 
+#include <cameraunlock/ads/ads_fade.h>
 #include <cameraunlock/camera/zoom_compensation.h>
 #include <cameraunlock/memory/pattern_scanner.h>
 #include <cameraunlock/memory/safe_memory.h>
@@ -61,6 +64,8 @@ RelativeAimPoint g_relativeAimPoint = nullptr;
 std::atomic<uintptr_t> g_liveCamera{0};
 
 CameraFrameHistory g_frames;
+// Follows the sights, for the aim marker: 1 at the hip, 0 with them fully up.
+cameraunlock::ads::AdsFade g_sightsFade;
 
 bool SameMatrix(const NiMatrix44& a, const NiMatrix44& b) {
     return std::memcmp(&a, &b, sizeof(NiMatrix44)) == 0;
@@ -181,8 +186,9 @@ void MaybeLogSurvey(uintptr_t cameraRoot, uintptr_t niCamera) {
 }
 
 void PublishCameraFrame(uintptr_t niCamera, const CameraBasis& clean, const CameraBasis& drawn,
-                        const NiFrustum& frustum, const NiMatrix44& local) {
+                        const NiFrustum& frustum, const NiMatrix44& local, float sightsUp) {
     CameraFrame f{};
+    f.sightsUp = sightsUp;
     f.niCamera = niCamera;
     f.clean = clean;
     f.drawn = drawn;
@@ -191,12 +197,16 @@ void PublishCameraFrame(uintptr_t niCamera, const CameraBasis& clean, const Came
     f.frustumNear = frustum.nearPlane;
     f.local = local;
     g_frames.Publish(f);
+    UpdateAimMarker(&f);
 }
 
 // Publishing an empty frame is how the render-side consumers are told there is
-// nothing tracked to correct for this frame.
+// nothing tracked to correct for this frame. The aim marker is told too: it is
+// drawn from the last frame it was given, so leaving it alone parks it on
+// screen pointing at nothing.
 void PublishNoFrame() {
     g_frames.Publish(CameraFrame{});
+    UpdateAimMarker(nullptr);
 }
 
 // The same, for a frame abandoned BEFORE the clean world transform was
@@ -216,7 +226,7 @@ void AbandonFrame() {
 void LogApplyState(bool active, bool haveRotation, bool havePosition,
                    float yaw, float pitch, float roll,
                    const CameraBasis& clean, const CameraBasis& drawn,
-                   const NiFrustum& frustum, float zoom) {
+                   const NiFrustum& frustum, float zoom, float sightsUp) {
     // Silent while nothing is tracked, so a session spent in menus writes
     // nothing, but the frame tracking stops is still recorded.
     static uint64_t s_lastMs = 0;
@@ -229,15 +239,16 @@ void LogApplyState(bool active, bool haveRotation, bool havePosition,
     if (!changed && now - s_lastMs < kApplyLogIntervalMs) return;
     s_lastMs = now;
     const float cosAngle = Dot3(clean.f, drawn.f);
+    const float lean[3] = {drawn.e[0] - clean.e[0], drawn.e[1] - clean.e[1], drawn.e[2] - clean.e[2]};
     Logger::Instance().Info(
         "apply: active=%d rot=%d pos=%d pose(%+.2f,%+.2f,%+.2f) turned %.2f deg "
         "lean(%+.2f,%+.2f,%+.2f) cleanFwd(%+.3f,%+.3f,%+.3f) drawnFwd(%+.3f,%+.3f,%+.3f) "
-        "frustum r=%.4f t=%.4f zoom %.4f",
+        "frustum r=%.4f t=%.4f zoom %.4f leanForward %+.3f sights %.2f",
         active, haveRotation, havePosition, yaw, pitch, roll,
         acosf(cosAngle > 1.0f ? 1.0f : (cosAngle < -1.0f ? -1.0f : cosAngle)) * RAD_TO_DEG,
-        drawn.e[0] - clean.e[0], drawn.e[1] - clean.e[1], drawn.e[2] - clean.e[2],
+        lean[0], lean[1], lean[2],
         clean.f[0], clean.f[1], clean.f[2], drawn.f[0], drawn.f[1], drawn.f[2],
-        frustum.right, frustum.top, zoom);
+        frustum.right, frustum.top, zoom, Dot3(lean, clean.f), sightsUp);
 }
 
 // The three pieces of the camera node this hook works from, read in one go so a
@@ -269,8 +280,9 @@ CameraBasis BuildCleanBasis(const NiMatrix44& pristineLocal, const NiMatrix44& r
     return basis;
 }
 
-// The head pose as it will be applied to this frame: already scaled for
-// whatever the game has done to the field of view.
+// The head pose as it will be applied to this frame. Yaw and pitch are already
+// scaled for whatever the game has done to the field of view; the lean is
+// scaled once it is in world space, where it can be split along the aim.
 struct HeadPose {
     float yaw = 0.0f, pitch = 0.0f, roll = 0.0f;
     float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -288,9 +300,10 @@ HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum) {
     // included: the head turns ten degrees, the camera turns ten degrees, and
     // the picture moves further by the ratio between the two fields of view.
     // Without this the mod's sensitivity appears to jump the moment the sights
-    // come up. Yaw, pitch and the lean all translate the picture and scale with
-    // it; roll turns the picture about the view axis by the same angle at every
-    // field of view there is, so it does not.
+    // come up. Yaw, pitch and a lean across the view all translate the picture
+    // and scale with it. Roll turns the picture about the view axis by the same
+    // angle at every field of view there is, and a lean along the view brings
+    // the scene closer without moving it across the frame, so neither does.
     pose.zoom = PoseZoomFactor(frustum.right, frustum.top);
     if (!(pose.zoom > 0.0f)) {
         pose.haveRotation = false;
@@ -300,9 +313,6 @@ HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum) {
     if (pose.zoom != 1.0f) {
         pose.yaw = cameraunlock::camera::ScaleAngleForZoom(pose.yaw, pose.zoom);
         pose.pitch = cameraunlock::camera::ScaleAngleForZoom(pose.pitch, pose.zoom);
-        pose.x *= pose.zoom;
-        pose.y *= pose.zoom;
-        pose.z *= pose.zoom;
     }
     return pose;
 }
@@ -338,6 +348,7 @@ void ReleaseTracking(uintptr_t niCamera, uintptr_t localOffset, const NiMatrix44
         SafeWrite(niCamera + localOffset, pristineLocal);
     }
     g_local.have = false;
+    g_sightsFade.Reset();
     ReleaseHelmetLight();
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
     PublishNoFrame();
@@ -363,13 +374,16 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     Mod& mod = Mod::Instance();
     const bool active = mod.IsEnabled() && GameState::IsInGameplay();
     const HeadPose pose = SampleHeadPose(mod, active, readout.frustum);
+    AdsState::Update();
 
     if (!pose.haveRotation && !pose.havePosition) {
         LogApplyState(active, false, false, 0.0f, 0.0f, 0.0f, cleanBasis, cleanBasis,
-                      readout.frustum, pose.zoom);
+                      readout.frustum, pose.zoom, 0.0f);
         ReleaseTracking(niCamera, layout.localTransformOffset, pristine, ourWriteStood);
         return;
     }
+
+    const float sightsUp = 1.0f - g_sightsFade.Update(AdsState::IsAiming(), GetTickCount64());
 
     CameraBasis drawn = cleanBasis;
     if (pose.haveRotation) {
@@ -389,15 +403,16 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
             leanWorld[i] = lean.x * leanBasis.f[i]
                          + lean.y * leanBasis.u[i]
                          + lean.z * leanBasis.r[i];
-            drawn.e[i] = cleanBasis.e[i] + leanWorld[i];
         }
+        ScaleLeanForZoom(leanWorld, cleanBasis.f, pose.zoom);
+        for (int i = 0; i < 3; ++i) drawn.e[i] = cleanBasis.e[i] + leanWorld[i];
     }
 
     const NiMatrix44 newLocal = BuildTrackedLocal(pristine, Transpose(rootRot), drawn,
                                                   leanWorld, pose.havePosition);
 
     // Publish the matching clean basis before the renderer can see the pose.
-    PublishCameraFrame(niCamera, cleanBasis, drawn, readout.frustum, newLocal);
+    PublishCameraFrame(niCamera, cleanBasis, drawn, readout.frustum, newLocal, sightsUp);
     if (!SafeWrite(niCamera + layout.localTransformOffset, newLocal)) {
         AbandonFrame();
         return;
@@ -418,7 +433,7 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     g_cleanWorld.Publish(niCamera, layout.worldTransformOffset, cleanWorld);
 
     LogApplyState(active, pose.haveRotation, pose.havePosition, pose.yaw, pose.pitch, pose.roll,
-                  cleanBasis, drawn, readout.frustum, pose.zoom);
+                  cleanBasis, drawn, readout.frustum, pose.zoom, sightsUp);
 }
 
 // The structured-exception frame is kept in a function of its own so the work

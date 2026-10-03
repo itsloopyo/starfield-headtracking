@@ -3,6 +3,8 @@
 #include "core/constants.h"
 #include "game/camera_math.h"
 
+#include <cameraunlock/camera/zoom_compensation.h>
+
 namespace StarfieldHT {
 
 // Starfield's world is metric: one world unit is one metre.
@@ -39,6 +41,18 @@ inline NiPoint3 CameraLocalLeanOffset(float posX, float posY, float posZ) {
     return NiPoint3(-posZ * UNITS_PER_METER,
                      posY * UNITS_PER_METER,
                     -posX * UNITS_PER_METER);
+}
+
+// A world-space lean scaled for the zoom: the part across the clean aim scales
+// with the picture, and the part along it is left whole, so a scope does not
+// cut short how far the player can lean in.
+inline void ScaleLeanForZoom(float lean[3], const float aim[3], float zoom) {
+    using cameraunlock::math::Vec3;
+    const Vec3 scaled = cameraunlock::camera::ScaleLeanForZoom(
+        Vec3(lean[0], lean[1], lean[2]), Vec3(aim[0], aim[1], aim[2]), zoom);
+    lean[0] = scaled.x;
+    lean[1] = scaled.y;
+    lean[2] = scaled.z;
 }
 
 // The camera's basis with its pitch and roll taken out: forward flattened onto

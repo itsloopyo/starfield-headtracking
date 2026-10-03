@@ -2,6 +2,7 @@
 
 #include "config.h"
 
+#include <cameraunlock/ads/aim_mode.h>
 #include <cameraunlock/config/config_owner.h>
 #include <cameraunlock/protocol/udp_receiver.h>
 #include <cameraunlock/tracking/head_tracking_session.h>
@@ -25,11 +26,13 @@ public:
     void ToggleYawMode();
     bool IsWorldSpaceYaw() const { return m_worldSpaceYaw.load(); }
 
-    // Sights locked (false) draws the weapon from the clean eye, so a lean never takes the eye
-    // off the sights. True free look draws it from the tracked eye, so the weapon stays put in
-    // the world and the head moves around it.
-    void ToggleTrueFreeLook();
-    bool IsTrueFreeLook() const { return m_trueFreeLook.load(std::memory_order_relaxed); }
+    // Sights locked draws the weapon from the clean eye, so a lean never takes the eye off the
+    // sights. The two free look modes draw it from the tracked eye, so the weapon stays put in
+    // the world and the head moves around it; free look with a marker also draws the aim marker
+    // while the sights are up.
+    void CycleAimMode();
+    cameraunlock::ads::AimMode GetAimMode() const { return m_aimMode.load(std::memory_order_relaxed); }
+    bool IsTrueFreeLook() const { return GetAimMode() != cameraunlock::ads::AimMode::SightsLocked; }
 
     // F8 cycles axis isolation for diagnostic testing.
     // 0 = normal, 1 = pitch-only, 2 = yaw-only, 3 = roll-only.
@@ -88,7 +91,7 @@ private:
     // Yaw mode: true = horizon-locked (world), false = camera-local
     std::atomic<bool> m_worldSpaceYaw{true};
 
-    std::atomic<bool> m_trueFreeLook{false};
+    std::atomic<cameraunlock::ads::AimMode> m_aimMode{cameraunlock::ads::AimMode::SightsLocked};
 
     // Axis isolation for diagnostic testing (0=normal, 1=pitch, 2=yaw, 3=roll)
     std::atomic<int> m_axisIsolation{0};

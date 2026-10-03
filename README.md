@@ -111,12 +111,12 @@ nav-cluster keys and the chords do exactly the same thing. Each is an entry in
 the `[Hotkeys]` lists in `CameraUnlock.ini`, so either can be rebound or
 removed there.
 
-| Action                | Nav-cluster | Chord          |
-|-----------------------|-------------|----------------|
-| Toggle tracking       | `End`       | `Ctrl+Shift+Y` |
-| Cycle tracking mode   | `Page Up`   | `Ctrl+Shift+G` |
-| Toggle horizon lock   | `Page Down` | `Ctrl+Shift+H` |
-| Toggle true free look | `Insert`    | `Ctrl+Shift+U` |
+| Action              | Nav-cluster | Chord          |
+|---------------------|-------------|----------------|
+| Toggle tracking     | `End`       | `Ctrl+Shift+Y` |
+| Cycle tracking mode | `Page Up`   | `Ctrl+Shift+G` |
+| Toggle horizon lock | `Page Down` | `Ctrl+Shift+H` |
+| Cycle aim mode      | `Insert`    | `Ctrl+Shift+U` |
 
 `Page Up` / `Ctrl+Shift+G` cycles tracking mode:
 
@@ -125,7 +125,7 @@ removed there.
 3. Rotational tracking disabled, positional tracking enabled
 4. Back to normal
 
-The tracking mode, horizon lock and true free look are saved to
+The tracking mode, horizon lock and aim mode are saved to
 `CameraUnlock.ini` when you change them, and the game starts in them next time. `End` changes the current
 session only: head tracking starts on or off as `EnableOnStartup` says.
 
@@ -136,11 +136,16 @@ controller points it, so with your head turned it sits off to one side with its
 sights still lined up, and your rounds land where those sights point. Head
 movement is scaled to the zoom, so a scope does not magnify it.
 
-By default leaning never takes your eye off the sights. `Insert` /
-`Ctrl+Shift+U` switches to **true free look**: the weapon stays put and your
-head moves freely around it, so to see down the sights you have to put your head
-behind them, as you would in VR. It is hard, and it is off by default. The mod
-saves the mode you pick, so it holds the next time you start the game.
+`Insert` / `Ctrl+Shift+U` cycles three ways of handling a lean while you aim,
+and the mod saves the one you pick, so it holds the next time you start the
+game:
+
+1. **Sights locked** (default) - leaning never takes your eye off the sights.
+2. **Free look with a marker** - the weapon stays put and your head moves freely
+   around it, so the sights only line up with your head behind them. A small
+   white marker shows where your rounds will land while the sights are up.
+3. **True free look** - the same, with no marker. To place a shot you have to
+   put your head behind the sights, as you would in VR. It is hard.
 
 ### Ship aim UI
 
@@ -169,7 +174,7 @@ Set `LightMultiplier` under `[Light]` in `CameraUnlock.ini`.
 <!-- cameraunlock:config -->
 The mod reads its settings from `CameraUnlock.ini` in the game folder, and creates the file when it starts and finds none. Edit it with any text editor.
 
-A setting set to `default` takes its value from `Defaults.ini`, which every head tracking mod that keeps its settings in `CameraUnlock.ini` reads. Head tracking mods that keep their settings in another file do not read it. Writing a value in place of `default` changes that setting for this game only. When the mod saves a setting that a hotkey changed in game, it writes the new value in place of `default`, so that setting no longer follows `Defaults.ini` in this game until you set it to `default` again.
+A setting set to `default` takes its value from `Defaults.ini`, which every head tracking mod that keeps its settings in `CameraUnlock.ini` reads. Head tracking mods that keep their settings in another file do not read it. Changing a setting in `Defaults.ini` changes it in every game that has it set to `default`. Writing a value in place of `default` changes that setting for this game only. When the mod saves a setting that a hotkey changed in game, it writes the new value in place of `default`, so that setting no longer follows `Defaults.ini` in this game until you set it to `default` again.
 
 `Defaults.ini` is `%AppData%\CameraUnlock\Defaults.ini` on Windows; `$XDG_CONFIG_HOME/CameraUnlock/Defaults.ini` on Linux, or `~/.config/CameraUnlock/Defaults.ini` where `XDG_CONFIG_HOME` is not set, under Wine and Proton too; and `~/Library/Application Support/CameraUnlock/Defaults.ini` on macOS. The mod's log, where it writes one, names the file it read.
 
@@ -185,6 +190,7 @@ The built-in value of each setting set to `default` below:
 - `RemoteSmoothing=0.15`
 - `PositionEnabled=true`
 - `TrueFreeLook=false`
+- `FreeLookMarker=false`
 - `PositionLimitX=0.3`
 - `PositionLimitY=0.2`
 - `PositionLimitYDown=0.2`
@@ -242,6 +248,9 @@ PositionEnabled=default
 ; false: while you aim down the sights, leaning keeps your eye on the sights.
 ; true: the weapon stays put and your head moves freely around it (true free look).
 TrueFreeLook=default
+; true, with TrueFreeLook=true: an aim marker shows where your shot will land while you aim down the sights.
+; It does nothing while TrueFreeLook is false.
+FreeLookMarker=default
 ; How far, in metres, leaning left or right can move the view.
 PositionLimitX=default
 ; How far, in metres, raising your head can move the view.
@@ -260,7 +269,7 @@ ToggleKey=default
 CycleTrackingModeKey=default
 ; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
 YawModeKey=default
-; Switches between keeping your eye on the sights and true free look (TrueFreeLook).
+; Cycles the aim mode: sights locked, free look with a marker, true free look (TrueFreeLook, FreeLookMarker).
 TrueFreeLookKey=default
 
 [Light]
@@ -303,9 +312,9 @@ across games.
 - **The weapon is off to one side when I aim down sights.** Your head is
   turned: the weapon stays on your aim and you are looking past it. Turn back to
   it, or move your aim to where you are looking.
-- **I can't see down the sights, they are misaligned.** You are in true free
-  look and your head is leaned off them. Move your head back behind them, or
-  press `Insert` / `Ctrl+Shift+U` to return to sights locked.
+- **I can't see down the sights, they are misaligned.** You are in one of the
+  free look modes and your head is leaned off them. Move your head back behind
+  them, or press `Insert` / `Ctrl+Shift+U` until the log says sights locked.
 - **Nothing happens in game, and the log says there is no build profile.**
   Your game build is unsupported. Check the
   [Releases page](https://github.com/itsloopyo/starfield-headtracking/releases)
