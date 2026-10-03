@@ -15,7 +15,6 @@
 #include "game/sight_depth.h"
 #include "game/starfield_types.h"
 #include "camera_boundary.h"
-#include "ui/aim_marker.h"
 
 #include <cameraunlock/ads/ads_fade.h>
 #include <cameraunlock/ads/lean_handover.h>
@@ -202,16 +201,12 @@ void PublishCameraFrame(uintptr_t niCamera, const CameraBasis& clean, const Came
     f.frustumNear = frustum.nearPlane;
     f.local = local;
     g_frames.Publish(f);
-    UpdateAimMarker(&f);
 }
 
 // Publishing an empty frame is how the render-side consumers are told there is
-// nothing tracked to correct for this frame. The aim marker is told too: it is
-// drawn from the last frame it was given, so leaving it alone parks it on
-// screen pointing at nothing.
+// nothing tracked to correct for this frame.
 void PublishNoFrame() {
     g_frames.Publish(CameraFrame{});
-    UpdateAimMarker(nullptr);
 }
 
 // The same, for a frame abandoned BEFORE the clean world transform was

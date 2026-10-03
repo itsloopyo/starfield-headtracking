@@ -5,11 +5,13 @@
 #include "core/mod.h"
 #include "core/rtti_utils.h"
 #include "game/build_profile.h"
+#include "game/ads_state.h"
 #include "game/build_selection.h"
 #include "game/game_state.h"
 #include "game/impact_projection.h"
 #include "hooks/camera_hook.h"
 
+#include <cameraunlock/ads/aim_mode.h>
 #include <cameraunlock/memory/pattern_scanner.h>
 #include <cameraunlock/memory/safe_memory.h>
 
@@ -37,6 +39,7 @@ struct MovieRect { float left, top, right, bottom; };
 
 // GFxValue's type tag: 5 is a number, and bit 6 marks a managed value that owns
 // a reference the caller has to release.
+constexpr uint32_t kGfxTypeBoolean = 2;
 constexpr uint32_t kGfxTypeNumber  = 5;
 constexpr uint32_t kGfxManagedFlag = 0x40;
 
@@ -56,11 +59,14 @@ constexpr double kOffscreenFrameWidths = 2.0;
 
 using HudUpdate = void (*)(uintptr_t);
 HudUpdate g_original = nullptr;
+std::atomic<uintptr_t> g_hudMovie{0};
 void* g_target = nullptr;
 void (*g_releaseValue)(GfxNumber*) = nullptr;
 
 constexpr char kReticleX[] = "root1.CenterGroup_mc.ReticleBase_mc.x";
 constexpr char kReticleY[] = "root1.CenterGroup_mc.ReticleBase_mc.y";
+constexpr char kReticleVisible[] = "root1.CenterGroup_mc.ReticleBase_mc.visible";
+constexpr char kReticleAlpha[]   = "root1.CenterGroup_mc.ReticleBase_mc.alpha";
 
 using HitEvent = uintptr_t (*)(uintptr_t, uintptr_t, uintptr_t);
 HitEvent g_playerHitOriginal = nullptr;
@@ -147,6 +153,38 @@ bool SetNumber(uintptr_t root, const char* path, double number) {
 
     GfxNumber value;
     value.number = number;
+    return setVariable(root, path, &value, 0);
+}
+
+// A boolean shares the number's storage: the payload is a union and the flag is
+// its first byte.
+bool GetBool(uintptr_t root, const char* path, bool& out) {
+    using GetVariable = bool (*)(uintptr_t, GfxNumber*, const char*);
+    const GetVariable getVariable = Virtual<GetVariable>(root, "GetVariable", kSlotGetVariable);
+    if (!getVariable) return false;
+
+    GfxNumber value;
+    const bool found = getVariable(root, &value, path);
+    if (value.type & kGfxManagedFlag) {
+        g_releaseValue(&value);
+        return false;
+    }
+    if (!found || value.type != kGfxTypeBoolean) return false;
+    unsigned char flag = 0;
+    memcpy(&flag, &value.number, sizeof(flag));
+    out = flag != 0;
+    return true;
+}
+
+bool SetBool(uintptr_t root, const char* path, bool flag) {
+    using SetVariable = bool (*)(uintptr_t, const char*, const GfxNumber*, uint32_t);
+    const SetVariable setVariable = Virtual<SetVariable>(root, "SetVariable", kSlotSetVariable);
+    if (!setVariable) return false;
+
+    GfxNumber value;
+    value.type = kGfxTypeBoolean;
+    const unsigned char byte = flag ? 1 : 0;
+    memcpy(&value.number, &byte, sizeof(byte));
     return setVariable(root, path, &value, 0);
 }
 
@@ -267,6 +305,55 @@ void PositionIncomingDamage(uintptr_t movie, uintptr_t root, double offsetX, dou
     }
 }
 
+// The aim marker of free look with a marker is the game's own crosshair. The
+// HUD hides it whenever its crosshair data says the sights are up, and says so
+// again each time that data changes (every shot moves the spread), so while the
+// marker is wanted it is shown just before the movie captures its render
+// snapshot, at the fade's opacity. It is already sitting on the aim point, and
+// drawn by the HUD it is part of what the game hands its frame generator.
+void HoldAimMarker(uintptr_t movie, uintptr_t root, bool tracked, float sightsUp) {
+    static uintptr_t lastMovie = 0;
+    static bool held = false;
+    static uint64_t rehidden = 0;
+    if (movie != lastMovie) {
+        lastMovie = movie;
+        held = false;
+    }
+
+    const bool aiming = AdsState::IsAiming();
+    const float opacity = tracked
+        ? cameraunlock::ads::AimMarkerOpacity(Mod::Instance().GetAimMode(), sightsUp) : 0.0f;
+    if (aiming && opacity > 0.0f) {
+        bool visible = false;
+        const bool read = GetBool(root, kReticleVisible, visible);
+        if (held && read && !visible) ++rehidden;
+        if (!SetBool(root, kReticleVisible, true) || !SetNumber(root, kReticleAlpha, opacity)) {
+            ReportTransientFailure("could not show the crosshair as the aim marker");
+            return;
+        }
+        held = true;
+        static uint64_t lastLog = 0;
+        const uint64_t now = GetTickCount64();
+        if (now - lastLog >= 1000) {
+            lastLog = now;
+            Logger::Instance().Info("aim marker: crosshair held up, opacity %.2f, the HUD had it %s, "
+                                    "hidden again by the HUD %llu times",
+                                    opacity, !read ? "unreadable" : visible ? "visible" : "hidden",
+                                    static_cast<unsigned long long>(rehidden));
+        }
+        return;
+    }
+    if (!held) return;
+    // With the sights still up the HUD wants it hidden and will not say so again
+    // until its data changes. With them down it has already shown it.
+    if (!SetNumber(root, kReticleAlpha, 1.0) || (aiming && !SetBool(root, kReticleVisible, false))) {
+        ReportTransientFailure("could not hand the crosshair back to the HUD");
+        return;
+    }
+    held = false;
+    Logger::Instance().Info("aim marker: crosshair handed back to the HUD");
+}
+
 void PositionReticle(uintptr_t menu) {
     // Read through SafeRead rather than dereferenced: the movie pointer is a
     // member of the menu the game handed us, but the root is read out of
@@ -300,7 +387,7 @@ void PositionReticle(uintptr_t menu) {
     if (unbindable) return;
 
     double x = baseX, y = baseY;
-    CameraFrame frame;
+    CameraFrame frame{};
     const Mod& mod = Mod::Instance();
     const bool active = mod.IsEnabled() && GameState::IsInGameplay() && GetCameraFrame(frame);
     if (active) {
@@ -386,8 +473,24 @@ void PositionHitMarker(uintptr_t menu) {
     }
 }
 
+void HoldAimMarkerForCapture(uintptr_t movie) {
+    __try {
+        uintptr_t root = 0;
+        if (!cameraunlock::memory::SafeRead(movie + kMovieRootOffset, root) || !root) return;
+        CameraFrame frame{};
+        const bool tracked = Mod::Instance().IsEnabled() && GameState::IsInGameplay()
+                          && GetCameraFrame(frame);
+        HoldAimMarker(movie, root, tracked, frame.sightsUp);
+    } __except (cameraunlock::memory::AccessViolationFilter(GetExceptionCode())) {
+        ReportHudException(GetExceptionCode(), "showing the crosshair as the aim marker");
+    }
+}
+
 void UpdateHud(uintptr_t menu) {
     g_original(menu);
+    uintptr_t movie = 0;
+    cameraunlock::memory::SafeRead(menu + kMenuMovieOffset, movie);
+    g_hudMovie.store(movie, std::memory_order_relaxed);
     __try {
         PositionReticle(menu);
         PositionHitMarker(menu);
@@ -520,7 +623,11 @@ bool SetShipReticlePosition(const ShipReticlePosition& position, bool shifted) {
     }
 }
 
-uint64_t CaptureShipMovie(uintptr_t movie, bool onlyChanges) {
+uint64_t CaptureHudMovies(uintptr_t movie, bool onlyChanges) {
+    if (movie && movie == g_hudMovie.load(std::memory_order_relaxed)) {
+        HoldAimMarkerForCapture(movie);
+        return g_captureOriginal(movie, onlyChanges);
+    }
     const Mod& mod = Mod::Instance();
     CameraFrame frame{};
     if (movie != g_shipMovie.load(std::memory_order_relaxed)
@@ -626,7 +733,7 @@ bool InstallShipReticleHook() {
         return false;
     }
     const MH_STATUS captureStatus = MH_CreateHook(reinterpret_cast<void*>(capture),
-        reinterpret_cast<void*>(&CaptureShipMovie), reinterpret_cast<void**>(&g_captureOriginal));
+        reinterpret_cast<void*>(&CaptureHudMovies), reinterpret_cast<void**>(&g_captureOriginal));
     if (captureStatus != MH_OK) {
         Logger::Instance().Error("Ship capture hook: %s", MH_StatusToString(captureStatus));
         return false;

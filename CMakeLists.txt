@@ -72,7 +72,6 @@ set(MOD_SOURCES
     src/hooks/input_hook.cpp
     src/game/game_state.cpp
     src/game/scene_layout.cpp
-    src/ui/aim_marker.cpp
     src/ui/stock_reticle.cpp
 )
 
@@ -118,8 +117,7 @@ target_include_directories(StarfieldHeadTracking PRIVATE
 
 # Windows libraries. psapi is here because cameraunlock's crash handler and
 # pattern scanner call EnumProcessModules and GetModuleInformation and core does
-# not link it itself. ws2_32 arrives transitively from cameraunlock, and the
-# aim marker's overlay names its own D3D libraries.
+# not link it itself. ws2_32 arrives transitively from cameraunlock.
 if(WIN32)
     target_link_libraries(StarfieldHeadTracking PRIVATE psapi)
 endif()

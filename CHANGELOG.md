@@ -19,8 +19,8 @@ All notable changes to this project are documented here. The format follows
 - Three aim modes, cycled with Insert or Ctrl+Shift+U. Sights locked is the
   default: leaning never takes your eye off the sights, because the weapon is
   drawn from your unleaned eye. In free look with a marker the weapon stays put
-  and your head moves freely around it, and a small white marker shows where
-  your rounds will land while the sights are up. True free look is the same
+  and your head moves freely around it, and the game's crosshair stays up
+  while the sights are raised to show where your rounds will land. True free look is the same
   with no marker, so to place a shot you have to put your head behind the
   sights. Switching slides the weapon over a fraction of a second instead of
   jumping. The mode is saved to `CameraUnlock.ini` as `[Position] TrueFreeLook`

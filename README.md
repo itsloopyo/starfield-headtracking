@@ -143,8 +143,9 @@ game:
 1. **Sights locked** (default) - leaning never takes your eye off the sights,
    and leaning in towards them brings them closer.
 2. **Free look with a marker** - the weapon stays put and your head moves freely
-   around it, so the sights only line up with your head behind them. A small
-   white marker shows where your rounds will land while the sights are up.
+   around it, so the sights only line up with your head behind them. The
+   game's crosshair stays up while the sights are raised and shows where your
+   rounds will land.
 3. **True free look** - the same, with no marker. To place a shot you have to
    put your head behind the sights, as you would in VR. It is hard.
 
@@ -321,9 +322,6 @@ across games.
 - **I can't see down the sights, they are misaligned.** You are in one of the
   free look modes and your head is leaned off them. Move your head back behind
   them, or press `Insert` / `Ctrl+Shift+U` until the log says sights locked.
-- **The white aim marker does not show in free look with a marker.** It is not
-  drawn while the game's frame generation is on. Turn frame generation off in
-  the game's display settings to use that mode.
 - **Nothing happens in game, and the log says there is no build profile.**
   Your game build is unsupported. Check the
   [Releases page](https://github.com/itsloopyo/starfield-headtracking/releases)
