@@ -111,6 +111,7 @@ cfg::ImportResult Import(const cfg::LegacyInput& input, Config& out) {
     // the game's own and none of them follows Defaults.ini.
     follows.NotInLegacy(C::TrueFreeLook);
     follows.NotInLegacy(C::FreeLookMarker);
+    follows.NotInLegacy(C::StockSights);
 
     return status == legacy::ReadStatus::Absent
                ? cfg::ImportResult::Absent(std::move(dropped), std::move(shaping), follows.Concepts())
@@ -123,9 +124,9 @@ cfg::ConfigTable<Config> MakeConfigTable() {
     using C = cfg::schema::Concept;
     cfg::ConfigTable<Config> table = cfg::HeadTrackingConfigTable<Config>(
         {C::UdpPort, C::EnableOnStartup, C::WorldSpaceYaw, C::RotationEnabled, C::LocalSmoothing,
-         C::RemoteSmoothing, C::PositionEnabled, C::TrueFreeLook, C::FreeLookMarker, C::PositionLimitX, C::PositionLimitY,
-         C::PositionLimitYDown, C::PositionLimitZ, C::PositionLimitZBack, C::ToggleKey, C::CycleTrackingModeKey,
-         C::YawModeKey, C::TrueFreeLookKey, C::LightMultiplier});
+         C::RemoteSmoothing, C::PositionEnabled, C::TrueFreeLook, C::FreeLookMarker, C::StockSights,
+         C::PositionLimitX, C::PositionLimitY, C::PositionLimitYDown, C::PositionLimitZ, C::PositionLimitZBack,
+         C::ToggleKey, C::CycleTrackingModeKey, C::YawModeKey, C::TrueFreeLookKey, C::LightMultiplier});
     table.Select(C::WorldSpaceYaw).Writable()
         .Comment("true: yaw turns around the world's up axis and a lean moves along the ground.\n"
                  "false: both follow the camera's own axes.")
@@ -133,6 +134,7 @@ cfg::ConfigTable<Config> MakeConfigTable() {
         .Select(C::PositionEnabled).Writable()
         .Select(C::TrueFreeLook).Writable()
         .Select(C::FreeLookMarker).Writable()
+        .Select(C::StockSights).Writable()
         // Left Ctrl is Starfield's sneak toggle, so a Ctrl+Shift chord crouches the player, and the
         // game acts on its own letter keys with any modifiers held: G throws a grenade, H opens the
         // status screen and J the database. Y, U and T are the cluster's free letters, which leaves

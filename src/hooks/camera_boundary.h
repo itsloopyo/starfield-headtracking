@@ -46,6 +46,19 @@ inline NiPoint3 CameraLocalLeanOffset(float posX, float posY, float posZ) {
                     -posX * UNITS_PER_METER);
 }
 
+// Stock sights: the share of the head's yaw, pitch and lean that reaches the
+// view, 1 at the hip and 0 with the sights up. Roll is not taken: a head tilt
+// turns the picture about the aim and leaves the sights on it. This runs before
+// the zoom scaling and everything else that reads the pose, so nothing after it
+// knows the mode.
+inline void EaseOutForStockSights(float share, float& yaw, float& pitch, float& x, float& y, float& z) {
+    yaw *= share;
+    pitch *= share;
+    x *= share;
+    y *= share;
+    z *= share;
+}
+
 // A world-space lean scaled for the zoom: the part across the clean aim scales
 // with the picture, and the part along it is left whole, so a scope does not
 // cut short how far the player can lean in.

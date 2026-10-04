@@ -128,7 +128,7 @@ void Mod::ApplyPositionSettings() {
     m_session.SetRemoteSmoothing(m_config.remote_smoothing);
 
     const cameraunlock::ads::AimMode aimMode =
-        cameraunlock::ads::DecodeAimMode(m_config.true_free_look, m_config.free_look_marker);
+        cameraunlock::ads::DecodeAimMode(m_config.true_free_look, m_config.free_look_marker, m_config.stock_sights);
     m_aimMode.store(aimMode);
     Logger::Instance().Info("%s", cameraunlock::ads::AimModeLabel(aimMode));
 
@@ -382,10 +382,11 @@ void Mod::CycleAimMode() {
     const cameraunlock::ads::AimMode mode = cameraunlock::ads::NextAimMode(m_aimMode.load());
     m_aimMode.store(mode);
     Logger::Instance().Info("%s", cameraunlock::ads::AimModeLabel(mode));
-    const cameraunlock::ads::AimModePair pair = cameraunlock::ads::EncodeAimMode(mode);
-    SaveToggle([pair](Config& c) {
-        c.true_free_look = pair.trueFreeLook;
-        c.free_look_marker = pair.freeLookMarker;
+    const cameraunlock::ads::AimModeSettings settings = cameraunlock::ads::EncodeAimMode(mode);
+    SaveToggle([settings](Config& c) {
+        c.true_free_look = settings.trueFreeLook;
+        c.free_look_marker = settings.freeLookMarker;
+        c.stock_sights = settings.stockSights;
     });
 }
 

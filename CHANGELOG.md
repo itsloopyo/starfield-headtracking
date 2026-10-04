@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Stock sights, a fourth aim mode on `Insert` / `Shift+Alt+U`, after true free
+  look. While the sights are up your head stops turning and leaning the view,
+  so the sights sit in the centre as they do without head tracking, and tilting
+  your head still tilts the view. The view eases onto your aim as the sights
+  come up and back to where you are looking as they go down. At the hip nothing
+  changes. It is saved to `CameraUnlock.ini` as `[Position] StockSights`.
+
+### Fixed
+
+- A scope that fills the screen follows your aim, so its reticle marks the
+  shot with your head turned or leaned.
+- A laser sight's beam stays on the weapon when you lean.
+
 ## [0.1.2] - 2026-10-03
 
 ### Changed

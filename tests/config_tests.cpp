@@ -170,18 +170,20 @@ void TestTogglesSave() {
         Check(ChangedLines(committed, afterYaw) == std::vector<std::string>{"WorldSpaceYaw=false"},
               "saving the yaw mode writes its value over default and changes nothing else");
 
-        // The aim mode key's three presses, each saving the pair in one save.
+        // The aim mode key's four presses, each saving the three values in one save.
         using cameraunlock::ads::AimMode;
-        Check(!created.config.true_free_look && !created.config.free_look_marker,
-              "TrueFreeLook and FreeLookMarker start off: sights locked is the default");
+        Check(!created.config.true_free_look && !created.config.free_look_marker && !created.config.stock_sights,
+              "TrueFreeLook, FreeLookMarker and StockSights start off: sights locked is the default");
         AimMode aimMode = cameraunlock::ads::DecodeAimMode(created.config.true_free_look,
-                                                           created.config.free_look_marker);
+                                                           created.config.free_look_marker,
+                                                           created.config.stock_sights);
         const auto pressAimModeKey = [&] {
             aimMode = cameraunlock::ads::NextAimMode(aimMode);
-            const cameraunlock::ads::AimModePair pair = cameraunlock::ads::EncodeAimMode(aimMode);
-            Check(owner.Save([pair](Config& c) {
-                      c.true_free_look = pair.trueFreeLook;
-                      c.free_look_marker = pair.freeLookMarker;
+            const cameraunlock::ads::AimModeSettings settings = cameraunlock::ads::EncodeAimMode(aimMode);
+            Check(owner.Save([settings](Config& c) {
+                      c.true_free_look = settings.trueFreeLook;
+                      c.free_look_marker = settings.freeLookMarker;
+                      c.stock_sights = settings.stockSights;
                   }).status == cfg::ConfigSaveStatus::Saved,
                   "the aim mode saves");
             return ReadBytes(path);
@@ -195,12 +197,22 @@ void TestTogglesSave() {
         Check(aimMode == AimMode::TrueFreeLook &&
                   ChangedLines(afterMarker, afterFreeLook) == std::vector<std::string>{"FreeLookMarker=false"},
               "the second press saves true free look and changes nothing else");
+        const std::string afterStock = pressAimModeKey();
+        Check(aimMode == AimMode::StockSights &&
+                  ChangedLines(afterFreeLook, afterStock) ==
+                      std::vector<std::string>{"TrueFreeLook=false", "StockSights=true"},
+              "the third press saves stock sights and changes nothing else");
         const std::string afterLocked = pressAimModeKey();
         Check(aimMode == AimMode::SightsLocked &&
-                  ChangedLines(afterFreeLook, afterLocked) == std::vector<std::string>{"TrueFreeLook=false"},
-              "the third press saves sights locked and changes nothing else");
-        Check(pressAimModeKey() == afterMarker && pressAimModeKey() == afterFreeLook,
-              "the cycle comes round to the same two rows");
+                  ChangedLines(afterStock, afterLocked) == std::vector<std::string>{"StockSights=false"},
+              "the fourth press saves sights locked and changes nothing else");
+        // StockSights now holds a value where the first round found default.
+        const std::string roundMarker = pressAimModeKey();
+        const std::string roundFreeLook = pressAimModeKey();
+        Check(ChangedLines(afterLocked, roundMarker) ==
+                      std::vector<std::string>{"TrueFreeLook=true", "FreeLookMarker=true"} &&
+                  ChangedLines(roundMarker, roundFreeLook) == std::vector<std::string>{"FreeLookMarker=false"},
+              "the cycle comes round to the same three rows");
 
         const auto rotationOnly = cameraunlock::EncodeTrackingMode(cameraunlock::TrackingMode::RotationOnly);
         Check(owner.Save([rotationOnly](Config& c) {
@@ -209,7 +221,7 @@ void TestTogglesSave() {
               }).status == cfg::ConfigSaveStatus::Saved,
               "the tracking mode saves");
         const std::string afterRotationOnly = ReadBytes(path);
-        Check(ChangedLines(afterFreeLook, afterRotationOnly) ==
+        Check(ChangedLines(roundFreeLook, afterRotationOnly) ==
                   std::vector<std::string>{"RotationEnabled=true", "PositionEnabled=false"},
               "saving rotation only writes both tracking mode rows over default and changes nothing else");
 
@@ -237,7 +249,8 @@ void TestTogglesSave() {
     const auto again = reopened.Load();
     Check(again.status == cfg::ConfigLoadStatus::Canonical && again.diagnostics.empty() &&
               !again.config.world_space_yaw && !again.config.rotation_enabled && again.config.position_enabled &&
-              again.config.true_free_look && !again.config.free_look_marker && again.config.enable_on_startup,
+              again.config.true_free_look && !again.config.free_look_marker && !again.config.stock_sights &&
+              again.config.enable_on_startup,
           "the saved yaw mode, aim mode and tracking mode come back at the next start");
 
     RemoveScratchFolder(dir);
@@ -277,16 +290,17 @@ void TestDefaultRowsFollowDefaultsIni() {
     RemoveScratchFolder(global);
 }
 
-// A file from before the marker holds TrueFreeLook alone and stays in true free look, and
-// FreeLookMarker alone is sights locked.
-void TestAimModePairLoads() {
+// A file from before the marker holds TrueFreeLook alone and stays in true free look,
+// FreeLookMarker alone is sights locked, a file from before stock sights stays in the mode it
+// was in, and StockSights wins over the other two.
+void TestAimModeLoads() {
     using cameraunlock::ads::AimMode;
     const std::wstring dir = ScratchFolder(L"aimmode");
     const std::wstring global = ScratchFolder(L"aimmode-global");
     const auto load = [&](const std::string& bytes) {
         WriteBytes(dir + kConfigFileName, bytes);
         const Config c = cfg::ConfigOwner<Config>(Options(dir, global + L"Defaults.ini")).Load().config;
-        return cameraunlock::ads::DecodeAimMode(c.true_free_look, c.free_look_marker);
+        return cameraunlock::ads::DecodeAimMode(c.true_free_look, c.free_look_marker, c.stock_sights);
     };
     const std::string freeLook = Replace(Rendered(), "TrueFreeLook=default\r\n", "TrueFreeLook=true\r\n");
     Check(load(Rendered()) == AimMode::SightsLocked, "a fresh file is sights locked");
@@ -297,6 +311,16 @@ void TestAimModePairLoads() {
           "both true is free look with a marker");
     Check(load(Replace(Rendered(), "FreeLookMarker=default\r\n", "FreeLookMarker=true\r\n")) == AimMode::SightsLocked,
           "FreeLookMarker alone is sights locked");
+
+    const std::string marker = Replace(freeLook, "FreeLookMarker=default\r\n", "FreeLookMarker=true\r\n");
+    Check(load(Replace(marker, "StockSights=default\r\n", "")) == AimMode::FreeLookMarker &&
+              load(Replace(freeLook, "StockSights=default\r\n", "")) == AimMode::TrueFreeLook &&
+              load(Replace(Rendered(), "StockSights=default\r\n", "")) == AimMode::SightsLocked,
+          "a file with no StockSights line stays in the mode it was in");
+    for (const std::string& others : {Rendered(), freeLook, marker}) {
+        Check(load(Replace(others, "StockSights=default\r\n", "StockSights=true\r\n")) == AimMode::StockSights,
+              "StockSights=true is stock sights whatever the other two hold");
+    }
     RemoveScratchFolder(dir);
     RemoveScratchFolder(global);
 }
@@ -313,7 +337,7 @@ void TestAdsModeIsNotTrueFreeLook() {
         const auto loaded = cfg::ConfigOwner<Config>(Options(dir, global + L"Defaults.ini")).Load();
         Check(loaded.status == cfg::ConfigLoadStatus::Canonical,
               std::string("a file carrying ads_mode=") + value + " loads, not " + cfg::ConfigLoadStatusName(loaded.status));
-        Check(!loaded.config.true_free_look && !loaded.config.free_look_marker,
+        Check(!loaded.config.true_free_look && !loaded.config.free_look_marker && !loaded.config.stock_sights,
               std::string("ads_mode=") + value + " leaves the aim mode at sights locked");
     }
     RemoveScratchFolder(dir);
@@ -339,7 +363,7 @@ int main(int argc, char** argv) {
         TestLegacyDefaultsMapToTheDefaults();
         TestTogglesSave();
         TestDefaultRowsFollowDefaultsIni();
-        TestAimModePairLoads();
+        TestAimModeLoads();
         TestAdsModeIsNotTrueFreeLook();
     } catch (const std::exception& e) {
         std::printf("FAIL: %s\n", e.what());

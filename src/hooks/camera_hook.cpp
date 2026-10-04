@@ -17,6 +17,7 @@
 #include "camera_boundary.h"
 
 #include <cameraunlock/ads/ads_fade.h>
+#include <cameraunlock/ads/aim_mode.h>
 #include <cameraunlock/ads/lean_handover.h>
 #include <cameraunlock/camera/zoom_compensation.h>
 #include <cameraunlock/memory/pattern_scanner.h>
@@ -68,6 +69,8 @@ CameraFrameHistory g_frames;
 // Follows the sights, for the aim marker and the weapon's eye: 1 at the hip, 0
 // with them fully up.
 cameraunlock::ads::AdsFade g_sightsFade;
+// Stock sights: the share of yaw, pitch and the lean that reaches the view.
+cameraunlock::ads::AdsFade g_stockSightsFade;
 // Holds the lean short of the rear sight while the sights are up.
 cameraunlock::ads::LeanHandover g_sightStop;
 
@@ -226,7 +229,8 @@ void AbandonFrame() {
 void LogApplyState(bool active, bool haveRotation, bool havePosition,
                    float yaw, float pitch, float roll,
                    const CameraBasis& clean, const CameraBasis& drawn,
-                   const NiFrustum& frustum, float zoom, float sightsUp, float forwardStop) {
+                   const NiFrustum& frustum, float zoom, float sightsUp, float forwardStop,
+                   float headShare) {
     // Silent while nothing is tracked, so a session spent in menus writes
     // nothing, but the frame tracking stops is still recorded.
     static uint64_t s_lastMs = 0;
@@ -243,12 +247,12 @@ void LogApplyState(bool active, bool haveRotation, bool havePosition,
     Logger::Instance().Info(
         "apply: active=%d rot=%d pos=%d pose(%+.2f,%+.2f,%+.2f) turned %.2f deg "
         "lean(%+.2f,%+.2f,%+.2f) cleanFwd(%+.3f,%+.3f,%+.3f) drawnFwd(%+.3f,%+.3f,%+.3f) "
-        "frustum r=%.4f t=%.4f zoom %.4f leanForward %+.3f sights %.2f forwardStop %.3f",
+        "frustum r=%.4f t=%.4f zoom %.4f leanForward %+.3f sights %.2f forwardStop %.3f head %.2f",
         active, haveRotation, havePosition, yaw, pitch, roll,
         acosf(cosAngle > 1.0f ? 1.0f : (cosAngle < -1.0f ? -1.0f : cosAngle)) * RAD_TO_DEG,
         lean[0], lean[1], lean[2],
         clean.f[0], clean.f[1], clean.f[2], drawn.f[0], drawn.f[1], drawn.f[2],
-        frustum.right, frustum.top, zoom, Dot3(lean, clean.f), sightsUp, forwardStop);
+        frustum.right, frustum.top, zoom, Dot3(lean, clean.f), sightsUp, forwardStop, headShare);
 }
 
 // The three pieces of the camera node this hook works from, read in one go so a
@@ -291,10 +295,11 @@ struct HeadPose {
     float zoom = 1.0f;
 };
 
-HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum) {
+HeadPose SampleHeadPose(Mod& mod, bool active, const NiFrustum& frustum, float headShare) {
     HeadPose pose;
     pose.haveRotation = active && mod.GetProcessedRotation(pose.yaw, pose.pitch, pose.roll);
     pose.havePosition = active && mod.GetPositionOffset(pose.x, pose.y, pose.z);
+    EaseOutForStockSights(headShare, pose.yaw, pose.pitch, pose.x, pose.y, pose.z);
 
     // A narrow field of view magnifies everything in the frame, head tracking
     // included: the head turns ten degrees, the camera turns ten degrees, and
@@ -349,6 +354,7 @@ void ReleaseTracking(uintptr_t niCamera, uintptr_t localOffset, const NiMatrix44
     }
     g_local.have = false;
     g_sightsFade.Reset();
+    g_stockSightsFade.Reset();
     g_sightStop.Stop();
     ReleaseHelmetLight();
     g_cleanWorld.Publish(0, 0, NiMatrix44{});
@@ -374,18 +380,20 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
 
     Mod& mod = Mod::Instance();
     const bool active = mod.IsEnabled() && GameState::IsInGameplay();
-    const HeadPose pose = SampleHeadPose(mod, active, readout.frustum);
     AdsState::Update();
+    const uint64_t now = GetTickCount64();
+    const bool aiming = AdsState::IsAiming();
+    const float headShare =
+        g_stockSightsFade.Update(cameraunlock::ads::StockSightsEngaged(mod.GetAimMode(), aiming), now);
+    const HeadPose pose = SampleHeadPose(mod, active, readout.frustum, headShare);
 
     if (!pose.haveRotation && !pose.havePosition) {
         LogApplyState(active, false, false, 0.0f, 0.0f, 0.0f, cleanBasis, cleanBasis,
-                      readout.frustum, pose.zoom, 0.0f, std::numeric_limits<float>::infinity());
+                      readout.frustum, pose.zoom, 0.0f, std::numeric_limits<float>::infinity(), 1.0f);
         ReleaseTracking(niCamera, layout.localTransformOffset, pristine, ourWriteStood);
         return;
     }
 
-    const uint64_t now = GetTickCount64();
-    const bool aiming = AdsState::IsAiming();
     const float sightsUp = 1.0f - g_sightsFade.Update(aiming, now);
     // Kept while the sights are still coming down, so the stop eases out with
     // them rather than letting go the frame the button is released.
@@ -443,7 +451,7 @@ void ApplyTracking(uintptr_t cameraRoot, uintptr_t niCamera) {
     g_cleanWorld.Publish(niCamera, layout.worldTransformOffset, cleanWorld);
 
     LogApplyState(active, pose.haveRotation, pose.havePosition, pose.yaw, pose.pitch, pose.roll,
-                  cleanBasis, drawn, readout.frustum, pose.zoom, sightsUp, forwardStop);
+                  cleanBasis, drawn, readout.frustum, pose.zoom, sightsUp, forwardStop, headShare);
 }
 
 // The structured-exception frame is kept in a function of its own so the work

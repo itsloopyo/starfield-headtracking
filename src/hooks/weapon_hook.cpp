@@ -151,7 +151,7 @@ void BuildWeaponPass(bool previous, bool reset, const float* camera, const float
             alignas(16) float adjusted[kRenderCameraFloats];
             std::memcpy(adjusted, camera, sizeof(adjusted));
             NiMatrix44 view{}, inverse{};
-            const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsTrueFreeLook(), NowMs());
+            const float cleanEyeShare = weaponEye.CleanEyeShare(Mod::Instance().IsFreeLook(), NowMs());
             WeaponPassView passView{worldRight / frustum[1], worldTop / frustum[2], cleanEyeShare};
             CompensateWeaponProjection(frame.clean, drawn, passView.scaleX, passView.scaleY,
                                       cleanEyeShare, frame.sightsUp, adjusted, view, inverse);

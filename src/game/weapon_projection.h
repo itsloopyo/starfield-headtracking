@@ -123,11 +123,12 @@ inline void WeaponPointInWorldPass(const CameraBasis& clean, const CameraBasis& 
 }
 
 // The aim mode key moves the weapon's eye by the whole lean, so it rides AdsFade
-// rather than stepping: 1 in sights locked, 0 in the free look modes.
+// rather than stepping: 1 in sights locked and stock sights, 0 in the free look
+// modes.
 class WeaponEye {
 public:
-    float CleanEyeShare(bool trueFreeLook, unsigned long long nowMs) {
-        return m_fade.Update(trueFreeLook, nowMs);
+    float CleanEyeShare(bool freeLook, unsigned long long nowMs) {
+        return m_fade.Update(freeLook, nowMs);
     }
 
 private:

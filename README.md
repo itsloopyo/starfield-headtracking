@@ -137,18 +137,18 @@ session only: head tracking starts on or off as `EnableOnStartup` says.
 
 ### Aiming down sights
 
-Head tracking stays on while you aim. The weapon stays where your mouse or
-controller points it, so with your head turned it sits off to one side with its
-sights still lined up, and your rounds land where those sights point. Head
-movement is scaled to the zoom, so a scope does not magnify it.
+Head tracking stays on while you aim, unless you pick stock sights below. The
+weapon stays where your mouse or controller points it, so with your head turned
+it sits off to one side with its sights still lined up, and your rounds land
+where those sights point. Head movement is scaled to the zoom, so a scope does
+not magnify it.
 
-A scope that fills the screen moves with your aim in every mode: with your head
-turned or leaned it sits off centre, and its reticle stays on the point your
-round will land. A laser sight's beam stays on the weapon when you lean.
+A scope that fills the screen moves with your aim: with your head turned or
+leaned it sits off centre, and its reticle stays on the point your round will
+land. A laser sight's beam stays on the weapon when you lean.
 
-`Insert` / `Shift+Alt+U` cycles three ways of handling a lean while you aim,
-and the mod saves the one you pick, so it holds the next time you start the
-game:
+`Insert` / `Shift+Alt+U` cycles four ways of aiming, and the mod saves the one
+you pick, so it holds the next time you start the game:
 
 1. **Sights locked** (default) - leaning never takes your eye off the sights,
    and leaning in towards them brings them closer.
@@ -158,11 +158,15 @@ game:
    rounds will land.
 3. **True free look** - the same, with no marker. To place a shot you have to
    put your head behind the sights, as you would in VR. It is hard.
+4. **Stock sights** - while the sights are up your head stops turning and
+   leaning the view, so the sights sit in the centre as they do without head
+   tracking. Tilting your head still tilts the view. When you lower the weapon
+   the view goes back to where you are looking.
 
 With the sights up, leaning in stops just short of the weapon's rear sight, in
-every mode. In sights locked your rounds leave from where the game has your
-eye, not from where you have leaned to, and the sights are drawn so that they
-still mark where the round will land.
+the first three modes. In sights locked your rounds leave from where the game
+has your eye, not from where you have leaned to, and the sights are drawn so
+that they still mark where the round will land.
 
 ### Ship aim UI
 
@@ -208,6 +212,7 @@ The built-in value of each setting set to `default` below:
 - `PositionEnabled=true`
 - `TrueFreeLook=false`
 - `FreeLookMarker=false`
+- `StockSights=false`
 - `PositionLimitX=0.3`
 - `PositionLimitY=0.2`
 - `PositionLimitYDown=0.2`
@@ -264,6 +269,9 @@ TrueFreeLook=default
 ; true, with TrueFreeLook=true: an aim marker shows where your shot will land while you aim down the sights.
 ; It does nothing while TrueFreeLook is false.
 FreeLookMarker=default
+; true: while you aim down the sights your head stops moving the view, apart from tilting it,
+; so the sights sit in the centre as they do without head tracking. At the hip nothing changes.
+StockSights=default
 ; How far, in metres, leaning left or right can move the view.
 PositionLimitX=default
 ; How far, in metres, raising your head can move the view.
@@ -282,7 +290,8 @@ ToggleKey=End, Shift+Alt+Y
 CycleTrackingModeKey=PageUp, Shift+Alt+T
 ; Switches yaw between the world's up axis and the camera's own (WorldSpaceYaw).
 YawModeKey=PageDown
-; Cycles the aim mode: sights locked, free look with a marker, true free look (TrueFreeLook, FreeLookMarker).
+; Cycles the aim mode: sights locked, free look with a marker, true free look, stock sights
+; (TrueFreeLook, FreeLookMarker, StockSights).
 TrueFreeLookKey=Insert, Shift+Alt+U
 
 [Light]
@@ -328,6 +337,11 @@ across games.
 - **I can't see down the sights, they are misaligned.** You are in one of the
   free look modes and your head is leaned off them. Move your head back behind
   them, or press `Insert` / `Shift+Alt+U` until the log says sights locked.
+- **The view swings when I raise or lower the sights.** You are in stock sights
+  with your head turned: the view goes to your aim while the sights are up and
+  back to where you are looking when they come down. Press `Insert` /
+  `Shift+Alt+U` for another mode if you want head tracking to carry on through
+  the aim.
 - **Nothing happens in game, and the log says there is no build profile.**
   Your game build is unsupported. Check the
   [Releases page](https://github.com/itsloopyo/starfield-headtracking/releases)

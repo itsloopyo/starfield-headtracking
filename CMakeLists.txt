@@ -146,6 +146,12 @@ if(STARFIELDHT_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/cameraunlock-core/cpp/include
     )
     add_test(NAME weapon_projection COMMAND starfieldht_weapon_tests)
+    add_executable(starfieldht_stock_sights_tests tests/stock_sights_tests.cpp)
+    target_include_directories(starfieldht_stock_sights_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/cameraunlock-core/cpp/include
+    )
+    add_test(NAME stock_sights COMMAND starfieldht_stock_sights_tests)
     add_executable(starfieldht_aim_tests tests/aim_projection_tests.cpp)
     target_include_directories(starfieldht_aim_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
     add_test(NAME aim_projection COMMAND starfieldht_aim_tests)

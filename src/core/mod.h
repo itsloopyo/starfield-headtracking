@@ -29,10 +29,11 @@ public:
     // Sights locked draws the weapon from the clean eye, so a lean never takes the eye off the
     // sights. The two free look modes draw it from the tracked eye, so the weapon stays put in
     // the world and the head moves around it; free look with a marker also draws the aim marker
-    // while the sights are up.
+    // while the sights are up. Stock sights eases yaw, pitch and the lean out while the sights
+    // are up and draws the weapon as sights locked does.
     void CycleAimMode();
     cameraunlock::ads::AimMode GetAimMode() const { return m_aimMode.load(std::memory_order_relaxed); }
-    bool IsTrueFreeLook() const { return GetAimMode() != cameraunlock::ads::AimMode::SightsLocked; }
+    bool IsFreeLook() const { return cameraunlock::ads::IsFreeLook(GetAimMode()); }
 
     // F8 cycles axis isolation for diagnostic testing.
     // 0 = normal, 1 = pitch-only, 2 = yaw-only, 3 = roll-only.
